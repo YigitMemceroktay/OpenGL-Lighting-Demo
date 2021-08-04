@@ -10,6 +10,9 @@
 * Specular Light Color
 * Specular Power
 * Ambient Power
+* Light Rotation
+
+
 <br />
 
 ### Some Screenshots from the application
