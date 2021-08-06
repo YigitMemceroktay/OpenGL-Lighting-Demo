@@ -24,14 +24,19 @@ void main()
 	
 	vec3 ambient = ambientStrength*ambient_color;
 	
+
+
 	vec3 lightdir = normalize(light_pos - fragpos);
 	float diff = max(dot(normalize(Normal),lightdir),0.0);
 	vec3 diffuse = diff * diffuse_color;
 	
 	vec3 viewdir = normalize(viewPos - fragpos);
-	vec3 reflectdir = reflect(-lightdir,Normal);
 	
-	float spec = pow(max(dot(reflectdir,viewdir),0.0),specPow);
+	vec3 halfwayDir = normalize(viewdir+lightdir);
+	
+	//vec3 reflectdir = reflect(-lightdir,Normal);
+	
+	float spec = pow(max(dot(halfwayDir,Normal	),0.0),specPow);
 	vec3 specular = specularStrength*spec*spec_color;
 
 	vec3 result = object_color*(ambient+ diffuse+specular);

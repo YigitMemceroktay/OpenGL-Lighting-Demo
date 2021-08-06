@@ -33,7 +33,7 @@ namespace Engine
 		static Shader LoadShaderFromFile(const char* vertexSrc, const char* fragmentSrc);
 		static std::string ReadFile(const char* location);
 		static Shader& GetShader(std::string name);
-		static unsigned int LoadTexture(std::string name, std::string location, MapType type);
+		static unsigned int LoadTexture(std::string name, std::string location);
 		static unsigned int GetTexture(std::string name);
 	};
 

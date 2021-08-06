@@ -3,11 +3,113 @@
 
 
 namespace Engine{
-
-
+	glm::mat4 view;
+	float isSphere = true;
 	bool firstMouse = true;
-	double lastX;
-	double lastY;
+	double lastX = 400;
+	double lastY = 300;
+	 float YAW = -90.0f;
+	 float PITCH = 0.0f;
+	glm::vec3 cameraPos = glm::vec3(0.0f, 0.5f, 6.0f);
+	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	std::vector<float> vertices;
+	
+	std::vector<unsigned int> indices;
+	std::vector<int> lineIndices;
+	void createSphereVertices(float radius, int sectorCount, int stackCount)
+	{
+		float PI = 3.1415;
+		
+
+		
+
+		float x, y, z, xy;                              // vertex position
+		float nx, ny, nz, lengthInv = 1.0f / radius;    // vertex normal
+		float s, t;                                     // vertex texCoord
+
+		float sectorStep = 2 * PI / sectorCount;
+		float stackStep = PI / stackCount;
+		float sectorAngle, stackAngle;
+
+		for (int i = 0; i <= stackCount; ++i)
+		{
+			stackAngle = PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
+			xy = radius * cosf(stackAngle);             // r * cos(u)
+			z = radius * sinf(stackAngle);              // r * sin(u)
+
+			// add (sectorCount+1) vertices per stack
+			// the first and last vertices have same position and normal, but different tex coords
+			for (int j = 0; j <= sectorCount; ++j)
+			{
+				sectorAngle = j * sectorStep;           // starting from 0 to 2pi
+
+				// vertex position (x, y, z)
+				x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
+				y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
+				vertices.push_back(x);
+				vertices.push_back(y);
+				vertices.push_back(z);
+
+				// normalized vertex normal (nx, ny, nz)
+				nx = x * lengthInv;
+				ny = y * lengthInv;
+				nz = z * lengthInv;
+				vertices.push_back(nx);
+				vertices.push_back(ny);
+				vertices.push_back(nz);
+
+				// vertex tex coord (s, t) range between [0, 1]
+				s = (float)j / sectorCount;
+				t = (float)i / stackCount;
+				vertices.push_back(s);
+				vertices.push_back(t);
+			}
+		}
+		// generate CCW index list of sphere triangles
+// k1--k1+1
+// |  / |
+// | /  |
+// k2--k2+1
+	
+		int k1, k2;
+		for (int i = 0; i < stackCount; ++i)
+		{
+			k1 = i * (sectorCount + 1);     // beginning of current stack
+			k2 = k1 + sectorCount + 1;      // beginning of next stack
+
+			for (int j = 0; j < sectorCount; ++j, ++k1, ++k2)
+			{
+				// 2 triangles per sector excluding first and last stacks
+				// k1 => k2 => k1+1
+				if (i != 0)
+				{
+					indices.push_back(k1);
+					indices.push_back(k2);
+					indices.push_back(k1 + 1);
+				}
+
+				// k1+1 => k2 => k2+1
+				if (i != (stackCount - 1))
+				{
+					indices.push_back(k1 + 1);
+					indices.push_back(k2);
+					indices.push_back(k2 + 1);
+				}
+
+				// store indices for lines
+				// vertical lines for all stacks, k1 => k2
+				lineIndices.push_back(k1);
+				lineIndices.push_back(k2);
+				if (i != 0)  // horizontal lines except 1st stack, k1 => k+1
+				{
+					lineIndices.push_back(k1);
+					lineIndices.push_back(k1 + 1);
+				}
+			}
+		}
+	}
 
 	void setUpImGui(GLFWwindow* window)
 	{
@@ -95,7 +197,38 @@ namespace Engine{
 		//glViewport(0, 0, width, height);
 	}
 
+	void cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
+	{
+		if (firstMouse)
+		{
+			lastX = xpos;
+			lastY = ypos;
+			firstMouse = false;
+		}
 
+		float xoffset = xpos - lastX;
+		float yoffset = lastY - ypos;
+		lastX = xpos;
+		lastY = ypos;
+
+		float sensitivity = 0.1f;
+		xoffset *= sensitivity;
+		yoffset *= sensitivity;
+
+		YAW += xoffset;
+		PITCH += yoffset;
+
+		if (PITCH > 89.0f)
+			PITCH = 89.0f;
+		if (PITCH < -89.0f)
+			PITCH = -89.0f;
+
+		glm::vec3 direction;
+		direction.x = cos(glm::radians(YAW)) * cos(glm::radians(PITCH));
+		direction.y = sin(glm::radians(PITCH));
+		direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
+		cameraFront = glm::normalize(direction);
+	}
 	Window::Window(std::string name, int Width, int Height)
 	{
 		props.Name = name;
@@ -125,7 +258,7 @@ namespace Engine{
 		glEnable(GL_MULTISAMPLE);
 		
 
-		
+		//glfwSetCursorPosCallback(props.window, cursorPosCallback);
 		
 		glfwSetFramebufferSizeCallback(props.window,FrameBufferCallback);
 	
@@ -141,58 +274,92 @@ namespace Engine{
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Framevs.glsl",
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Framefs.glsl"
 		);
+		ResourceManager::LoadShader("pbr"
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrvs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrfs.glsl");
 		Shader defaultShader = ResourceManager::GetShader("default");
 
+		ResourceManager::LoadTexture("albedo", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\albedo.jpg");
+		ResourceManager::LoadTexture("metallic", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\metallic.jpg");
+		ResourceManager::LoadTexture("roughness", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\roughness.jpg");
+		ResourceManager::LoadTexture("ao", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\ao.jpg");
+		ResourceManager::LoadTexture("normal", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\normal.jpg");
+	
 	
 	}
 
 	void Window::GameLoop()
 	{
 		
+		createSphereVertices(1., 100, 100);
+
+		unsigned int VBOS, VAOS,VEOS;
+		glGenVertexArrays(1, &VAOS);
+		glBindVertexArray(VAOS);
+
+		glGenBuffers(1, &VBOS);
+		glBindBuffer(GL_ARRAY_BUFFER, VBOS);
+
+		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), &vertices[0], GL_STATIC_DRAW);
+			/*
+		glBufferSubData(GL_ARRAY_BUFFER,0,vertices.size()*sizeof(float),&vertices[0]);
+		glBufferSubData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float),normals.size()*sizeof(float),&normals[0]);
+		glBufferSubData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float)+normals.size()*sizeof(float),normals.size()*sizeof(float),&texCoords[0]);
+	*/	
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(float)*8,0);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float)*3));
+		glEnableVertexAttribArray(2);
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 8, (void*)(sizeof(float) *6));
+
+		glGenBuffers(1, &VEOS);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, VEOS);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER,indices.size()*sizeof(float),&indices[0],GL_STATIC_DRAW );
 		// ------------------------------------------------------------------
-		
 		float vertices[] = {
-	    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-		0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-		0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-		0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-		-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-		-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+			// positions          // normals           // texture coords
+			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+			 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
+			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+			-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
 
-		-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-		0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-		0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-		0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   0.0f, 0.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   1.0f, 0.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   1.0f, 1.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   1.0f, 1.0f,
+			-0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   0.0f, 1.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   0.0f, 0.0f,
 
-		-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-		-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-		-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-		-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-		-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-		-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-		
-		 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-		 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-		 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-		
-		-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-		 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-		 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-		 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-		-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-		
-		-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-		 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-		 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-		 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-		-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+			-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+
+			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+			 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+
+			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
+			 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 1.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 0.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
+
+			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f,
+			 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 1.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
+			-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 0.0f,
+			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f
 		};
 		float quadVertices[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
 			 // positions   // texCoords
@@ -213,10 +380,12 @@ namespace Engine{
 		glBindBuffer(GL_ARRAY_BUFFER, VBO);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
 		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(sizeof(float)*3));
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(sizeof(float)*3));
 		glEnableVertexAttribArray(1);
+		glEnableVertexAttribArray(2);
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(sizeof(float)* 6));
 		// note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
 		glBindBuffer(GL_ARRAY_BUFFER, 0);		
 
@@ -269,10 +438,8 @@ namespace Engine{
 		
 
 
-		glm::mat4 view = glm::lookAt(glm::vec3(0.0f,2.0f,5.0f), glm::vec3(0.0f,0.0f,-1.0f), glm::vec3(0., 1., 0.));
+		view = glm::lookAt(cameraPos,cameraPos+cameraFront,cameraUp);
 		glm::mat4 projection;
-		glm::mat4 model = glm::mat4(1.0f);
-		model = glm::rotate(model, glm::radians(45.0f), glm::vec3(0., 1., 0.));
 		projection = glm::perspective(glm::radians(45.f), 800.0f / 600.0f, 0.1f, 100.0f);
 		
 
@@ -294,15 +461,24 @@ namespace Engine{
 		float ambient[3] = { 170.f/255.,170./255.0f,170./255.0f };
 		float diffuse[3] = { 115./255.0f,115/255.0f,115/255.0f };
 		float specular[3] = { 150./255.,150./255.f,150./255.f };
-		
+		float rotationx = 20.f;
+		float rotationy = 45.f;
+		float rotationz = 0.f;
 		// GET SHADERS
 		Shader defaultShader = ResourceManager::GetShader("default");
 		Shader screenShader = ResourceManager::GetShader("frame");
-		
-		
+		Shader pbrShader = ResourceManager::GetShader("pbr");
+		pbrShader.Use();
+		pbrShader.SetFloat1("albedoMap", 0);
+		pbrShader.SetFloat1("normalMap", 1.);
+		pbrShader.SetFloat1("metallicMap", 2.);
+		pbrShader.SetFloat1("roughnessMap", 3.);
+		pbrShader.SetFloat1("aoMap", 4.);
+
 		
 		while (!glfwWindowShouldClose(props.window))
 		{
+			view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 			//Fps counter
 			timer.currentTime = glfwGetTime();
 			timer.deltaTime = timer.currentTime - timer.lastTime;
@@ -311,13 +487,16 @@ namespace Engine{
 			
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 			glEnable(GL_DEPTH_TEST); // enable depth testing (is disabled for rendering screen-space quad)
-			glClearColor(0.7f,0.7, 0.7f, 0.7f);
+			glClearColor(1.0f,1.0, 1.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			
 			glm::mat4 lightModel = glm::mat4(1.0f);
 			lightModel = glm::rotate(lightModel, glm::radians(rotate), glm::vec3(0.0f, 1.0f, 0.0f));
 			lightModel = glm::translate(lightModel, glm::vec3(0.0f, 2.0f, -5.0f));
-
+			glm::mat4 model = glm::mat4(1.0f);
+			model = glm::rotate(model, glm::radians(rotationx), glm::vec3(1., 0., 0.));
+			model = glm::rotate(model, glm::radians(rotationy), glm::vec3(0., 1., 0.));
+			model = glm::rotate(model, glm::radians(rotationz), glm::vec3(0., 0., 1.));
 			defaultShader.Use();
 			defaultShader.SetMat4("projection", projection);
 			defaultShader.SetMat4("view", view);
@@ -332,64 +511,137 @@ namespace Engine{
 			
 			defaultShader.SetFloat3("ambient_color", glm::vec3(ambient[0], ambient[1], ambient[2]));
 			defaultShader.SetFloat3("diffuse_color", glm::vec3(diffuse[0],diffuse[1], diffuse[2]));
-			defaultShader.SetFloat3("spec_color", glm::vec3(specular[0], specular[1], specular[2]));
-			glBindVertexArray(VAO);
-			glDrawArrays(GL_TRIANGLES, 0, 36);
+			//glBindVertexArray(VAO);
+		//	glDrawArrays(GL_TRIANGLES, 0, 36);
+		
+			//std::cout << glGetError();
 
+						
+			/*
+			pbrShader.Use();
+			pbrShader.SetMat4("projection", projection);
+			pbrShader.SetMat4("view", view);
+			pbrShader.SetMat4("model", model);
+			pbrShader.SetMat4("lightModel", lightModel);
+			pbrShader.SetFloat3("albedo", glm::vec3(0.8, 0., 0.));
+			pbrShader.SetFloat1("ao", 1.0f);
+			pbrShader.SetFloat1("metallic", 0.3);
+			pbrShader.SetFloat1("roughness", 0.3);
+			pbrShader.SetFloat3("lightColor", glm::vec3(0.8f, 0.8f, 0.8f));
+			pbrShader.SetFloat3("camPos", cameraPos);
+		
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D,ResourceManager::GetTexture("albedo"));
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normal"));
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallic"));
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughness"));
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("ao"));
+			*/
+			if (isSphere) {
+				glBindVertexArray(VAOS);
+				glDrawElements(GL_TRIANGLES, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+			}
+			else
+			{
+				glBindVertexArray(VAO);
+				glDrawArrays(GL_TRIANGLES, 0, 36);
+			}
+			std::cout << glGetError();
+			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+			glBlitFramebuffer(0, 0, 800, 600, 0, 0, 800, 600, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
 			// clear all relevant buffers
-			glClearColor(0.7f, 0.7f, 0.7f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
+			glClearColor(1.0f, 1.f, 1.0f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			screenShader.Use();
 			glBindVertexArray(quadVAO);
 			glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
-			//glDrawArrays(GL_TRIANGLES, 0, 6);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
 
 
 			ImGui_ImplOpenGL3_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
 			ImGui::SetNextWindowPos({ 0.0,0.0 });
-			ImGui::SetNextWindowSize({ 200.,600. });
+			ImGui::SetNextWindowSize({ 250.,600. });
 			
 
 			ImGui::Begin("Demo  window", &open,ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 			ImGui::PushFont(font1);
+		
+				ImGui::SetWindowFontScale(1.5);
+				ImGui::Text("Shapes");
+				ImGui::SetWindowFontScale(1.0);
+			if(ImGui::Button("Sphere"))
+			{
+				isSphere = true;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Cube"))
+			{
+				isSphere = false;
+			}
+		
+			ImGui::SetWindowFontScale(1.5);
+			ImGui::Text("Object Properties");
+			ImGui::SetWindowFontScale(1.0);
+		
 			ImGui::Text("Object Color");
-			ImGui::ColorPicker4("Color", colors1);
-			//ImGui::Spacing();
-			ImGui::Text("Light Rotation");
+			ImGui::ColorPicker4("Object Color", colors1);
 			
-			ImGui::SliderFloat("degrees", &rotate, 0.0f, 360.0f, "%f",1.0f);
-			//ImGui::Spacing();
-			ImGui::Text("Specular Power");
-			ImGui::InputFloat("", &specPow, 0.0f, 0.0f, "%f", 0);
+			ImGui::Text("Object Rotation");
+			ImGui::SliderFloat("x rotation", &rotationx,0.0f,360.0f ,"%f degrees" ,1.0f);
+			ImGui::SliderFloat("y rotation", &rotationy,0.0f,360.0f ,"%f degrees" ,1.0f);
+			ImGui::SliderFloat("z rotation", &rotationz,0.0f,360.0f ,"%f degrees" ,1.0f);
+	
+		
+			
+			
+			
+			
 			
 			
 		
+			
+			
 			ImGui::Spacing();
-			ImGui::Text("Ambient Power");
-			ImGui::InputFloat("a", &ambientStrength);
-			ImGui::Spacing();
-			ImGui::Text("Specular Strength");
-			ImGui::InputFloat("s", &specStrength);
-			//ImGui::EndChild();
+			ImGui::SetWindowFontScale(1.5);
+			ImGui::Text("Light Properties");
+			ImGui::SetWindowFontScale(1.0);
+			
 
-			ImGui::BeginChild("Colors");
-			ImGui::Spacing();
+			ImGui::SliderFloat("Light Rotation", &rotate, 0.0f, 360.0f, "%f degrees", 1.0f);
+			ImGui::Text("Specular Power");
+			ImGui::InputFloat("", &specPow, 0.0f, 0.0f, "%f", 0);
 
-			ImGui::Text("Ambient Light Color");
-			ImGui::ColorEdit3("ambient", ambient,0 );
-			ImGui::Text("Diffuse Light Color");
-			ImGui::ColorEdit3("diffuse", diffuse, 0);
-			ImGui::Text("Specular Light Color");
-			ImGui::ColorEdit3("specular", specular, 0);
-			ImGui::EndChild();
+			
+			ImGui::InputFloat("Ambient Power", &ambientStrength);
+			ImGui::Spacing();
+			
+			ImGui::InputFloat("Specular Strength", &specStrength);
+			
+
+		
+			ImGui::Spacing();
+			ImGui::SetWindowFontScale(1.5);
+			ImGui::Text("Light Colors");
+			ImGui::SetWindowFontScale(1.0);
+			
+			ImGui::ColorEdit3("Ambient", ambient,0 );
+		
+			ImGui::ColorEdit3("Diffuse", diffuse, 0);
+		
+			ImGui::ColorEdit3("Specular", specular, 0);
+		
 			ImGui::PopFont();
 			ImGui::End();
-			ImGui::SetNextWindowPos({ 200.0,0.0 });
+			ImGui::SetNextWindowPos({ 250.0,0.0 });
 			ImGui::SetNextWindowSize({ 800.,600. });
 			ImGui::Begin("GameWindow", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 			ImGui::PushFont(font1);

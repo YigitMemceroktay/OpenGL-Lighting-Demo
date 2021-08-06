@@ -183,6 +183,8 @@
     <None Include="src\Shaders\Defaultvs.glsl" />
     <None Include="src\Shaders\Framefs.glsl" />
     <None Include="src\Shaders\Framevs.glsl" />
+    <None Include="src\Shaders\Pbrfs.glsl" />
+    <None Include="src\Shaders\Pbrvs.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="src\OpenGL\font.ttf" />

@@ -95,6 +95,8 @@
     <None Include="src\Shaders\Defaultfs.glsl" />
     <None Include="src\Shaders\Framevs.glsl" />
     <None Include="src\Shaders\Framefs.glsl" />
+    <None Include="src\Shaders\Pbrvs.glsl" />
+    <None Include="src\Shaders\Pbrfs.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="src\OpenGL\font.ttf" />
