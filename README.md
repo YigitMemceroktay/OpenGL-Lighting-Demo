@@ -1,22 +1,18 @@
-# OpenGL-Blinn-Phong-Lighting-Demo
+# OpenGL-PBR-Lighting-Demo
 
-## This application a simple implementation of the 1977 Blinn-Phong lighting model
+
 
 
 ## Modifiable Values
-* Object Color
-* Ambient Light Color
-* Diffuse Light Color
-* Specular Light Color
-* Specular Power
-* Ambient Power
-* Light Rotation
+* Material Color
+* Material Roughness
+* Material Metallicness ?
 
 
 <br />
 
 ### Some Screenshots from the application
-*  <img src="https://user-images.githubusercontent.com/70861720/128200534-3c3e09ba-bbd5-4019-9ebf-fc94626a843c.jpg" alt="screenshot" width="800"/>
-*  <img src="https://user-images.githubusercontent.com/70861720/128200884-ddf4b258-54e3-4f89-a141-f53f84ddd52f.jpg" alt="screenshot" width="800"/>
-*  <img src="https://user-images.githubusercontent.com/70861720/128201124-46169c22-f99a-4b18-b934-4043f6efb536.jpg" alt="screenshot" width="800"/>
+*  <img src="https://user-images.githubusercontent.com/70861720/129965849-d6f25d67-1ea1-4ac8-8e2f-8ff2b1f3d19b.jpg" alt="screenshot" width="800"/>
+*  <img src="https://user-images.githubusercontent.com/70861720/129965745-233d1871-76b4-43af-8b8a-deed8ffb1971.jpg" alt="screenshot" width="800"/>
+
 
