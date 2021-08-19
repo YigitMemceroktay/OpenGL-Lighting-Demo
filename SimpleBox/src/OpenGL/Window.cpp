@@ -82,10 +82,10 @@ namespace Engine {
 			}
 		}
 		// generate CCW index list of sphere triangles
-// k1--k1+1
-// |  / |
-// | /  |
-// k2--k2+1
+		// k1--k1+1
+		// |  / |
+		// | /  |
+		// k2--k2+1
 
 		int k1, k2;
 		for (int i = 0; i < stackCount; ++i)
@@ -319,11 +319,7 @@ namespace Engine {
 		glBindBuffer(GL_ARRAY_BUFFER, VBOS);
 
 		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), &vertices[0], GL_STATIC_DRAW);
-		/*
-	glBufferSubData(GL_ARRAY_BUFFER,0,vertices.size()*sizeof(float),&vertices[0]);
-	glBufferSubData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float),normals.size()*sizeof(float),&normals[0]);
-	glBufferSubData(GL_ARRAY_BUFFER,vertices.size()*sizeof(float)+normals.size()*sizeof(float),normals.size()*sizeof(float),&texCoords[0]);
-*/
+		
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, 0);
 		glEnableVertexAttribArray(1);
@@ -425,7 +421,6 @@ namespace Engine {
 		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
 
-
 		//SETUP FRAME BUFFER
 		unsigned int framebuffer;
 		glGenFramebuffers(1, &framebuffer);
@@ -449,17 +444,11 @@ namespace Engine {
 			//	cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << endl;
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-
-
-
 		Timer timer;
-
-
 
 		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 		glm::mat4 projection;
 		projection = glm::perspective(glm::radians(45.f), 800.0f / 600.0f, 0.1f, 100.0f);
-
 
 
 		//Setting Up ImGUI
@@ -472,24 +461,21 @@ namespace Engine {
 		//Variables that will be modified with ImGUI
 		bool open = true;
 		float colors1[4] = { 229. / 255.,57. / 255.,219. / 255.,1. };
-		float rotate = 0;
-		float specPow = 64.0f;
-		float specStrength = 0.6f;
-		float ambientStrength = 0.8f;
-		float ambient[3] = { 170.f / 255.,170. / 255.0f,170. / 255.0f };
-		float diffuse[3] = { 115. / 255.0f,115 / 255.0f,115 / 255.0f };
-		float specular[3] = { 150. / 255.,150. / 255.f,150. / 255.f };
-		float rotationx = 20.f;
-		float rotationy = 45.f;
-		float rotationz = 0.f;
+		float rotate1 = 0;
+		float rotate2 = 0;
+		float rotate3 = 0;
+		float rotate4 = 0;
+		float roughness = 0.05;
+		float mettalic = 0.0f;
+
 		// GET SHADERS
 		Shader defaultShader = ResourceManager::GetShader("default");
 		Shader screenShader = ResourceManager::GetShader("frame");
 		Shader pbrShader = ResourceManager::GetShader("pbr");
 
 
-		float roughness = 0.05;
-		float mettalic = 0.0f;
+		
+		glm::mat4 lightModel  = glm::mat4(1.0f);
 		while (!glfwWindowShouldClose(props.window))
 		{
 			view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
@@ -516,107 +502,106 @@ namespace Engine {
 			
 			for (unsigned int i = 0; i < sizeof(lightPositions) / sizeof(lightPositions[0]); ++i)
 			{
-				glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
+				lightModel = glm::mat4(1.0f);
+				if(i == 0)
+					lightModel = glm::rotate(lightModel, glm::radians(rotate1), glm::vec3(0., 1., 0.));
+				else if(i == 1)
+					lightModel = glm::rotate(lightModel, glm::radians(rotate2), glm::vec3(0., 1., 0.));
+				else if(i == 2)
+					lightModel = glm::rotate(lightModel, glm::radians(rotate3), glm::vec3(0., 1., 0.));
+				else if(i == 3)
+					lightModel = glm::rotate(lightModel, glm::radians(rotate4), glm::vec3(0., 1., 0.));
+				lightModel = glm::translate(lightModel,lightPositions[i]);
+				glm::vec3 newPos;
 				newPos = lightPositions[i];
-				pbrShader.SetFloat3(("lightPosition[" + std::to_string(i) + "]").c_str(), newPos);
+				pbrShader.SetFloat3(("lightPosition[" + std::to_string(i) + "]").c_str(),glm::mat3(lightModel)*newPos);
 				pbrShader.SetFloat3(("lightColors[" + std::to_string(i) + "]").c_str(), lightColors[i]);
 				
 			}
 			pbrShader.SetFloat1("metallic", mettalic);
 			pbrShader.SetFloat1("roughness",roughness);
-			//model = glm::mat4(1.0f);
-			//pbrShader.SetMat4("model", model);
-			//glBindVertexArray(VAO);
-		//	glDrawArrays(GL_TRIANGLES, 0, 36);
-		 glBindVertexArray(VAOS);
+			
+			glBindVertexArray(VAOS);
 			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
 				
 			
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-				glBlitFramebuffer(0, 0, 800, 600, 0, 0, 800, 600, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-				glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
-				// clear all relevant buffers
-				glClearColor(1.0f, 1.f, 1.0f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
-				glClear(GL_COLOR_BUFFER_BIT);
+			glBlitFramebuffer(0, 0, 800, 600, 0, 0, 800, 600, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
+			// clear all relevant buffers
+			glClearColor(1.0f, 1.f, 1.0f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
+			glClear(GL_COLOR_BUFFER_BIT);
 
-				screenShader.Use();
-				glBindVertexArray(quadVAO);
-				glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
-				glDrawArrays(GL_TRIANGLES, 0, 6);
+			screenShader.Use();
+			glBindVertexArray(quadVAO);
+			glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
+			glDrawArrays(GL_TRIANGLES, 0, 6);
 
-				std::cout << glGetError();
-				ImGui_ImplOpenGL3_NewFrame();
-				ImGui_ImplGlfw_NewFrame();
-				ImGui::NewFrame();
-				ImGui::SetNextWindowPos({ 0.0,0.0 });
-				ImGui::SetNextWindowSize({ 250.,600. });
+			std::cout << glGetError();
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+			ImGui::SetNextWindowPos({ 0.0,0.0 });
+			ImGui::SetNextWindowSize({ 250.,600. });
 
 
-				ImGui::Begin("Demo  window", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-				ImGui::PushFont(font1);
+			ImGui::Begin("Demo  window", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+			ImGui::PushFont(font1);
 
-				ImGui::SetWindowFontScale(1.5);
-				
-				ImGui::SetWindowFontScale(1.0);
-				
+		
+			ImGui::Text("Material Properties");
+			ImGui::SetWindowFontScale(1.0);
 
-				ImGui::SetWindowFontScale(1.5);
-				ImGui::Text("Material Properties");
-				ImGui::SetWindowFontScale(1.0);
+			ImGui::Text("Object Color");
+			ImGui::ColorPicker4("Object Color", colors1);
 
-				ImGui::Text("Object Color");
-				ImGui::ColorPicker4("Object Color", colors1);
+		
+			ImGui::Spacing();
+			ImGui::SetWindowFontScale(1.5);
+		
+			ImGui::SetWindowFontScale(1.0);
 
+			ImGui::Separator();
+
+			ImGui::Spacing();
+			ImGui::SetWindowFontScale(1.5);
+			ImGui::Text("Light Properties");
+
+			ImGui::SetWindowFontScale(1.0);
+			ImGui::Spacing();
+		
+			ImGui::SliderFloat("Light Rotation 1", &rotate1, 0.0f, 360.0f, "%f degrees", 1.0f);
+			ImGui::SliderFloat("Light Rotation 2", &rotate2, 0.0f, 360.0f, "%f degrees", 1.0f);
+			ImGui::SliderFloat("Light Rotation 3", &rotate3, 0.0f, 360.0f, "%f degrees", 1.0f);
+			ImGui::SliderFloat("Light Rotation 4", &rotate4, 0.0f, 360.0f, "%f degrees", 1.0f);
+
+			ImGui::SliderFloat("Roughness",&roughness , 0.05, 1.0f, "", 0);
+			ImGui::SliderFloat("Mettalic",&mettalic , 0.0, 1.0f, "", 0);
+
+			ImGui::PopFont();
+			ImGui::End();
+			ImGui::SetNextWindowPos({ 250.0,0.0 });
+			ImGui::SetNextWindowSize({ 800.,600. });
+			ImGui::Begin("GameWindow", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+			ImGui::PushFont(font1);
 			
-				ImGui::Spacing();
-				ImGui::SetWindowFontScale(1.5);
-			
-				ImGui::SetWindowFontScale(1.0);
+			ImGui::BeginChild("GameRender");
+			// Get the size of the child (i.e. the whole draw size of the windows).
+			ImVec2 wsize = ImGui::GetWindowSize();
+			// Because I use the texture from OpenGL, I need to invert the V from the UV.
+			ImGui::Image((ImTextureID)textureColorbuffer, wsize, ImVec2(0, 1), ImVec2(1, 0));
+			ImGui::EndChild();
+		
+			ImGui::PopFont();
+			ImGui::End();
+			// Render dear imgui into screen
+			ImGui::Render();
+			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 
-			
-
-
-				
-
-
-				ImGui::Spacing();
-				ImGui::SetWindowFontScale(1.5);
-				
-				ImGui::SetWindowFontScale(1.0);
-
-			
-			
-
-				ImGui::SliderFloat("Roughness",&roughness , 0.05, 1.0f, "", 0);
-				ImGui::SliderFloat("Mettalic",&mettalic , 0.0, 1.0f, "", 0);
-
-				ImGui::PopFont();
-				ImGui::End();
-				ImGui::SetNextWindowPos({ 250.0,0.0 });
-				ImGui::SetNextWindowSize({ 800.,600. });
-				ImGui::Begin("GameWindow", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-				ImGui::PushFont(font1);
-				
-				ImGui::BeginChild("GameRender");
-				// Get the size of the child (i.e. the whole draw size of the windows).
-				ImVec2 wsize = ImGui::GetWindowSize();
-				// Because I use the texture from OpenGL, I need to invert the V from the UV.
-				ImGui::Image((ImTextureID)textureColorbuffer, wsize, ImVec2(0, 1), ImVec2(1, 0));
-				ImGui::EndChild();
-
-				ImGui::PopFont();
-				ImGui::End();
-				// Render dear imgui into screen
-				ImGui::Render();
-				ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-
-				glfwSwapBuffers(props.window);
-				glfwPollEvents();
-
-			
+			glfwSwapBuffers(props.window);
+			glfwPollEvents();
 
 		}
 
