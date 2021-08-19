@@ -8,21 +8,17 @@ namespace Engine {
 	double lastY = 300;
 	float YAW = -90.0f;
 	float PITCH = 0.0f;	
-
+	Camera camera;
 	glm::vec3 cameraPos = glm::vec3(0.0f, 0.5f, 6.0f);
 	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 lightPositions[] = {
-	glm::vec3(-10.0f,  10.0f, 10.0f),
-	glm::vec3(10.0f,  10.0f, 10.0f),
-	glm::vec3(-10.0f, -10.0f, 10.0f),
-	glm::vec3(10.0f, -10.0f, 10.0f),
+	glm::vec3(0.f,  0., 10.0f),
+	
 	};
 	glm::vec3 lightColors[] = {
-		glm::vec3(300.0f, 300.0f, 300.0f),
-		glm::vec3(300.0f, 300.0f, 300.0f),
-		glm::vec3(300.0f, 300.0f, 300.0f),
-		glm::vec3(300.0f, 300.0f, 300.0f)
+		glm::vec3(150.0f, 150.0f,150.0f),
+		
 	};
 	int nrRows = 7;
 	int nrColumns = 7;
@@ -242,6 +238,7 @@ namespace Engine {
 		direction.y = sin(glm::radians(PITCH));
 		direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
 		cameraFront = glm::normalize(direction);
+		
 	}
 	Window::Window(std::string name, int Width, int Height)
 	{
@@ -293,16 +290,21 @@ namespace Engine {
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrfs.glsl");
 		Shader defaultShader = ResourceManager::GetShader("default");
 
-		ResourceManager::LoadTexture("albedo", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\albedo.jpg");
-		ResourceManager::LoadTexture("metallic", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\metallic.jpg");
-		ResourceManager::LoadTexture("roughness", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\roughness.jpg");
-		ResourceManager::LoadTexture("ao", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\ao.jpg");
-		ResourceManager::LoadTexture("normal", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\normal.jpg");
+		ResourceManager::LoadTexture("albedo", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\albedo.png");
+		ResourceManager::LoadTexture("metallic", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\metallic.png");
+		ResourceManager::LoadTexture("roughness", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\roughness.png");
+		
+		ResourceManager::LoadTexture("normal", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\normal.png");
 
 		Shader pbrShader = ResourceManager::GetShader("pbr");
 		pbrShader.Use();
-		pbrShader.SetFloat3("albedo", glm::vec3(0.5f, 0., 0.));
-		pbrShader.SetFloat1("ao", 1.0f);
+	
+		
+		pbrShader.SetInt1("albedoMap", 1);
+		pbrShader.SetInt1("normalMap", 0);
+		pbrShader.SetInt1("metallicMap", 2);
+		pbrShader.SetInt1("roughnessMap", 3);
+		
 
 	}
 
@@ -478,6 +480,11 @@ namespace Engine {
 		glm::mat4 lightModel  = glm::mat4(1.0f);
 		while (!glfwWindowShouldClose(props.window))
 		{
+			
+
+		
+
+
 			view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 			
 			//Fps counter
@@ -499,7 +506,7 @@ namespace Engine {
 			pbrShader.SetMat4("model", model);
 			pbrShader.SetFloat3("camPos", cameraPos);		
 			pbrShader.SetFloat3("albedo", glm::vec3(colors1[0],colors1[1],colors1[2]));
-			
+		
 			for (unsigned int i = 0; i < sizeof(lightPositions) / sizeof(lightPositions[0]); ++i)
 			{
 				lightModel = glm::mat4(1.0f);
@@ -518,10 +525,19 @@ namespace Engine {
 				pbrShader.SetFloat3(("lightColors[" + std::to_string(i) + "]").c_str(), lightColors[i]);
 				
 			}
-			pbrShader.SetFloat1("metallic", mettalic);
-			pbrShader.SetFloat1("roughness",roughness);
+		
+			
 			
 			glBindVertexArray(VAOS);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normal"));
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedo"));
+
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallic"));
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughness"));
 			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
 				
 			
@@ -571,10 +587,8 @@ namespace Engine {
 			ImGui::SetWindowFontScale(1.0);
 			ImGui::Spacing();
 		
-			ImGui::SliderFloat("Light Rotation 1", &rotate1, 0.0f, 360.0f, "%f degrees", 1.0f);
-			ImGui::SliderFloat("Light Rotation 2", &rotate2, 0.0f, 360.0f, "%f degrees", 1.0f);
-			ImGui::SliderFloat("Light Rotation 3", &rotate3, 0.0f, 360.0f, "%f degrees", 1.0f);
-			ImGui::SliderFloat("Light Rotation 4", &rotate4, 0.0f, 360.0f, "%f degrees", 1.0f);
+			ImGui::SliderFloat("Light Rotation ", &rotate1, 0.0f, 360.0f, "%f degrees", 1.0f);
+		
 
 			ImGui::SliderFloat("Roughness",&roughness , 0.05, 1.0f, "", 0);
 			ImGui::SliderFloat("Mettalic",&mettalic , 0.0, 1.0f, "", 0);
