@@ -3,12 +3,11 @@ out vec4 FragColor;
 in vec2 TexCoords;
 in vec3 WorldPos;
 in vec3 Normal;
+in mat3 TBN;
 uniform sampler2D albedoMap;
 uniform sampler2D normalMap;
 uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
-uniform sampler2D aoMap;
-
 
 
 
@@ -75,17 +74,16 @@ vec3 getNormalFromMap()
 };
 
 void main()
-{      vec3 albedo     = pow(texture(albedoMap, TexCoords).rgb, vec3(2.2));
+{   vec3 albedo = pow(texture(albedoMap,TexCoords).rgb,vec3(2.2));
+    //vec3 albedo  = pow(texture(albedoMap, TexCoords).rgb, 2.2);
+    vec3 N  = getNormalFromMap();
     float metallic  = texture(metallicMap, TexCoords).r;
     float roughness = texture(roughnessMap, TexCoords).r;
-    float ao        = texture(aoMap, TexCoords).r;
-
-    vec3 N = getNormalFromMap();
+    float ao        = 1.0f;
+    
     vec3 V = normalize(camPos - WorldPos);
-
-    // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
-    // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
-    vec3 F0 = vec3(0.04); 
+    
+     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
 
     // reflectance equation

@@ -10,12 +10,12 @@
 #include "imgui_impl_opengl3.h"
 namespace Engine
 {
-	struct WindowProperties
+	 struct WindowProperties
 	{
-		std::string Name;
-		int Width;
-		int Height;
-		GLFWwindow* window;
+		static std::string Name;
+		static float Width;
+		static float Height;
+		static GLFWwindow* window;
 		
 	};
 
