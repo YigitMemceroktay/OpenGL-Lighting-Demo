@@ -1,7 +1,20 @@
 #include "Window.h"
 #include <vector>
+
+#include "stb_image.h"
 namespace Engine {
+	float WindowProperties::Width;
+	float WindowProperties::Height;
+	std::string WindowProperties::Name;
+	GLFWwindow* WindowProperties::window;
+	glm::mat4 projection;
+	unsigned int framebuffer;
+	unsigned int textureColorbuffer;
+	unsigned int rbo;
+	void renderQuad();
+	void processInput(GLFWwindow* window);
 	glm::mat4 view;
+	unsigned int hdrTexture;
 	float isSphere = true;
 	bool firstMouse = true;
 	double lastX = 400;
@@ -13,7 +26,7 @@ namespace Engine {
 	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 lightPositions[] = {
-	glm::vec3(0.f,  0., 20.0f),
+	glm::vec3(0.f,  0.,10.0f),
 	
 	};
 	glm::vec3 lightColors[] = {
@@ -204,7 +217,36 @@ namespace Engine {
 	}
 	void FrameBufferCallback(GLFWwindow* window, int width, int height)
 	{
-		//glViewport(0, 0, width, height);
+		WindowProperties::Height = (float)height;
+		WindowProperties::Width = (float)width;
+		std::cout << WindowProperties::Height << std::endl;
+		std::cout << WindowProperties::Width << std::endl;
+		glViewport(0., 0., width-250, height);
+		
+		glDeleteFramebuffers(1, &framebuffer);
+		glGenFramebuffers(1, &framebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		// create a color attachment texture
+
+		//glGenTextures(1, &textureColorbuffer);
+		glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width- 250, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+		// create a renderbuffer object for depth and stencil attachment (we won't be sampling these)
+
+		//glGenRenderbuffers(1, &rbo);
+		glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width-250, height); // use a single renderbuffer object for both a depth AND stencil buffer.
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
+		// now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			//	cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << endl;
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		
+		
+
 	}
 
 	void cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
@@ -242,9 +284,9 @@ namespace Engine {
 	}
 	Window::Window(std::string name, int Width, int Height)
 	{
-		props.Name = name;
-		props.Width = Width;
-		props.Height = Height;
+		WindowProperties::Name = name;
+		WindowProperties::Width = Width;
+		WindowProperties::Height = Height;
 
 	}
 
@@ -254,24 +296,24 @@ namespace Engine {
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+		
 		glfwWindowHint(GLFW_SAMPLES, 4);
-		props.window = glfwCreateWindow(props.Width, props.Height, props.Name.c_str(), NULL, NULL);
+		WindowProperties::window = glfwCreateWindow(WindowProperties::Width, WindowProperties::Height, WindowProperties::Name.c_str(), NULL, NULL);
 
 
-		glfwMakeContextCurrent(props.window);
+		glfwMakeContextCurrent(WindowProperties::window);
 
 		if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
 			std::cout << "Failed to initialize OpenGL context" << std::endl;
 
 		}
-		glViewport(0, 0, 800., 600.);
+		glViewport(0, 0, 1670., 1080.);
 		glEnable(GL_MULTISAMPLE);
 
 
-		//glfwSetCursorPosCallback(props.window, cursorPosCallback);
+		//glfwSetCursorPosCallback(WindowProperties::window, cursorPosCallback);
 
-		glfwSetFramebufferSizeCallback(props.window, FrameBufferCallback);
+		glfwSetFramebufferSizeCallback(WindowProperties::window, FrameBufferCallback);
 
 		//glEnable(GL_BLEND);
 
@@ -288,23 +330,55 @@ namespace Engine {
 		ResourceManager::LoadShader("pbr"
 			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrvs.glsl",
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrfs.glsl");
+
+		ResourceManager::LoadShader("cubemap"
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Cubemapvs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Cubemapfs.glsl");
 		Shader defaultShader = ResourceManager::GetShader("default");
 
 		ResourceManager::LoadTexture("albedo", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\albedo.png");
 		ResourceManager::LoadTexture("metallic", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\metallic.png");
 		ResourceManager::LoadTexture("roughness", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\roughness.png");
-		
+		ResourceManager::LoadTexture("ao", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\ao.png");
 		ResourceManager::LoadTexture("normal", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\normal.png");
+		
+		ResourceManager::LoadTexture("albedof", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\albedo.png");
+		ResourceManager::LoadTexture("metallicf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\metallic.png");
+		ResourceManager::LoadTexture("roughnessf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\roughness.png");
+		ResourceManager::LoadTexture("aof", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\ao.png");
+
+		ResourceManager::LoadTexture("normalf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\normal.png");
 
 		Shader pbrShader = ResourceManager::GetShader("pbr");
 		pbrShader.Use();
 	
 		
-		pbrShader.SetInt1("albedoMap", 1);
-		pbrShader.SetInt1("normalMap", 0);
+		pbrShader.SetInt1("albedoMap", 0);
+		pbrShader.SetInt1("normalMap", 1);
 		pbrShader.SetInt1("metallicMap", 2);
 		pbrShader.SetInt1("roughnessMap", 3);
+		pbrShader.SetInt1("aoMap", 4);
+		stbi_set_flip_vertically_on_load(true);
+		int width, height, nrComponents;
+		float* data = stbi_loadf("./src/Textures/cubemap/Mt-Washington-Gold-Room_Ref.hdr", &width, &height, &nrComponents, 0);
 		
+		if (data)
+		{
+			glGenTextures(1, &hdrTexture);
+			glBindTexture(GL_TEXTURE_2D, hdrTexture);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, data);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+			stbi_image_free(data);
+		}
+		else
+		{
+			std::cout << "Failed to load HDR image." << std::endl;
+		}
 
 	}
 
@@ -424,22 +498,22 @@ namespace Engine {
 
 
 		//SETUP FRAME BUFFER
-		unsigned int framebuffer;
+	
 		glGenFramebuffers(1, &framebuffer);
 		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 		// create a color attachment texture
-		unsigned int textureColorbuffer;
+		
 		glGenTextures(1, &textureColorbuffer);
 		glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1670, 1080, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
 		// create a renderbuffer object for depth and stencil attachment (we won't be sampling these)
-		unsigned int rbo;
+		
 		glGenRenderbuffers(1, &rbo);
 		glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600); // use a single renderbuffer object for both a depth AND stencil buffer.
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1670, 1080); // use a single renderbuffer object for both a depth AND stencil buffer.
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
 		// now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -449,12 +523,12 @@ namespace Engine {
 		Timer timer;
 
 		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-		glm::mat4 projection;
-		projection = glm::perspective(glm::radians(45.f), 800.0f / 600.0f, 0.1f, 100.0f);
+		
+		projection = glm::perspective(glm::radians(45.f), (WindowProperties::Width-250.f) / WindowProperties::Height, 0.1f, 100.0f);
 
 
 		//Setting Up ImGUI
-		setUpImGui(props.window);
+		setUpImGui(WindowProperties::window);
 		//Add a Custom Font To ImGui
 		ImGuiIO& io = ImGui::GetIO();
 		ImFont* font1 = io.Fonts->AddFontFromFileTTF("C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\OpenGL\\font.ttf", 16);
@@ -474,19 +548,21 @@ namespace Engine {
 		Shader defaultShader = ResourceManager::GetShader("default");
 		Shader screenShader = ResourceManager::GetShader("frame");
 		Shader pbrShader = ResourceManager::GetShader("pbr");
+		Shader cubemapShader = ResourceManager::GetShader("cubemap");
 
 
-		
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glm::mat4 lightModel  = glm::mat4(1.0f);
-		while (!glfwWindowShouldClose(props.window))
+		while (!glfwWindowShouldClose(WindowProperties::window))
 		{
 			
 
 		
-
+			processInput(WindowProperties::window);
 
 			view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-			
+			projection = glm::perspective(glm::radians(45.f), (WindowProperties::Width - 250.f) / WindowProperties::Height, 0.1f, 100.0f);
+
 			//Fps counter
 			timer.currentTime = glfwGetTime();
 			timer.deltaTime = timer.currentTime - timer.lastTime;
@@ -500,6 +576,7 @@ namespace Engine {
 
 			
 			glm::mat4 model = glm::mat4(1.0f);
+			//model = glm::scale(model, glm::vec3(10.0f, 0.2f, 10.0f));
 			pbrShader.Use();
 			pbrShader.SetMat4("projection", projection);
 			pbrShader.SetMat4("view", view);
@@ -519,6 +596,7 @@ namespace Engine {
 				else if(i == 3)
 					lightModel = glm::rotate(lightModel, glm::radians(rotate4), glm::vec3(0., 1., 0.));
 				lightModel = glm::translate(lightModel,lightPositions[i]);
+
 				glm::vec3 newPos;
 				newPos = lightPositions[i];
 				pbrShader.SetFloat3(("lightPosition[" + std::to_string(i) + "]").c_str(),glm::mat3(lightModel)*newPos);
@@ -530,19 +608,35 @@ namespace Engine {
 			
 			glBindVertexArray(VAOS);
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normal"));
-			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedo"));
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normal"));
+			
 
 			glActiveTexture(GL_TEXTURE2);
 			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallic"));
 			glActiveTexture(GL_TEXTURE3);
 			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughness"));
-			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
-				
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("ao"));
+
+			//glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+		
 			
+			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+			/*
+			cubemapShader.Use();
+			cubemapShader.SetMat4("projection", projection);
+			cubemapShader.SetMat4("view", view);
+			cubemapShader.SetInt1("equirectangularMap", 0.0f);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, hdrTexture);
+			glBindVertexArray(VAO);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+			*/
+
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-			glBlitFramebuffer(0, 0, 800, 600, 0, 0, 800, 600, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+			glBlitFramebuffer(0, 0, WindowProperties::Width-250, WindowProperties::Height, 0, 0,WindowProperties::Width-250., WindowProperties::Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
 			// clear all relevant buffers
@@ -554,12 +648,12 @@ namespace Engine {
 			glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 
-			std::cout << glGetError();
+			//std::cout << glGetError();
 			ImGui_ImplOpenGL3_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
 			ImGui::SetNextWindowPos({ 0.0,0.0 });
-			ImGui::SetNextWindowSize({ 250.,600. });
+			ImGui::SetNextWindowSize({ 250.,(float)WindowProperties::Height });
 
 
 			ImGui::Begin("Demo  window", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
@@ -596,7 +690,7 @@ namespace Engine {
 			ImGui::PopFont();
 			ImGui::End();
 			ImGui::SetNextWindowPos({ 250.0,0.0 });
-			ImGui::SetNextWindowSize({ 800.,600. });
+			ImGui::SetNextWindowSize({ (float)WindowProperties::Width-250.0f,(float)WindowProperties::Height });
 			ImGui::Begin("GameWindow", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 			ImGui::PushFont(font1);
 			
@@ -614,7 +708,7 @@ namespace Engine {
 			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 
-			glfwSwapBuffers(props.window);
+			glfwSwapBuffers(WindowProperties::window);
 			glfwPollEvents();
 
 		}
@@ -622,4 +716,17 @@ namespace Engine {
 
 
 	};
+	void processInput(GLFWwindow* window)
+	{
+		
+			const float cameraSpeed = 0.05f; // adjust accordingly
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+			cameraPos += cameraSpeed * cameraFront;
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+			cameraPos -= cameraSpeed * cameraFront;
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+			cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+			cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	}
 };

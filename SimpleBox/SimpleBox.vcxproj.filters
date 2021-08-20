@@ -103,6 +103,10 @@
     <None Include="src\Shaders\Framefs.glsl" />
     <None Include="src\Shaders\Pbrvs.glsl" />
     <None Include="src\Shaders\Pbrfs.glsl" />
+    <None Include="src\Shaders\Pbrcubevs.glsl" />
+    <None Include="src\Shaders\Pbrcubefs.glsl" />
+    <None Include="src\Shaders\Cubemapfs.glsl" />
+    <None Include="src\Shaders\Cubemapvs.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="src\OpenGL\font.ttf" />

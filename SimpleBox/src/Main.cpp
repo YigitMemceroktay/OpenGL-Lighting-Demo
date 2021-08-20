@@ -2,7 +2,7 @@
 
 int main()
 {
-	Engine::Window*  window = new Engine::Window("OpenGL",1050,600);
+	Engine::Window*  window = new Engine::Window("OpenGL",1920,1080);
 
 	window->Init();
 	window->GameLoop();
