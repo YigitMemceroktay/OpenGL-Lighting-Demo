@@ -12,7 +12,7 @@
 <br />
 
 ### Some Screenshots from the application
-*  <img src="https://user-images.githubusercontent.com/70861720/130107568-ac65fc67-ac83-43d0-83c1-bf27a91e06f0.jpg" alt="screenshot" width="800"/>
+*  <img src="https://user-images.githubusercontent.com/70861720/130324315-ca24071b-1a73-48dd-9196-7a22b334aa60.jpg" alt="screenshot" width="800"/>
 
 
 
