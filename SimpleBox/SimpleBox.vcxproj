@@ -122,12 +122,12 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glad\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glm\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glad\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glm\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\imgui;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\assimp-4.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\lib-vc2019;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\lib-vc2019;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\assimp-4.1.0\build\code\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -139,20 +139,23 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glad\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glm\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glad\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glm\include;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\imgui;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\assimp-4.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\lib-vc2019;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\glfw-3.3.4\lib-vc2019;C:\Users\yigit\source\repos\SimpleBox\SimpleBox\vendor\assimp-4.1.0\build\code\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\Main.cpp" />
     <ClCompile Include="src\OpenGL\Camera.cpp" />
+    <ClCompile Include="src\OpenGL\Mesh.cpp" />
+    <ClCompile Include="src\OpenGL\Model.cpp" />
+    <ClCompile Include="src\OpenGL\MousePicker.cpp" />
     <ClCompile Include="src\OpenGL\ResourceManager.cpp" />
     <ClCompile Include="src\OpenGL\Shader.cpp" />
     <ClCompile Include="src\OpenGL\Window.cpp" />
@@ -167,6 +170,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\OpenGL\Camera.h" />
+    <ClInclude Include="src\OpenGL\Mesh.h" />
+    <ClInclude Include="src\OpenGL\Model.h" />
+    <ClInclude Include="src\OpenGL\MousePicker.h" />
     <ClInclude Include="src\OpenGL\ResourceManager.h" />
     <ClInclude Include="src\OpenGL\Shader.h" />
     <ClInclude Include="src\OpenGL\stb_image.h" />

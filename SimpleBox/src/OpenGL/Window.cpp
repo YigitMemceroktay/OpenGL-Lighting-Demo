@@ -7,30 +7,42 @@ namespace Engine {
 	float WindowProperties::Height;
 	std::string WindowProperties::Name;
 	GLFWwindow* WindowProperties::window;
+	glm::mat4 view;
 	glm::mat4 projection;
+	bool input = false;
+	MousePicker mousePicker(projection, view);
+
 	unsigned int framebuffer;
 	unsigned int textureColorbuffer;
 	unsigned int rbo;
 	void renderQuad();
+	bool TestRayOBBIntersection(
+		glm::vec3 ray_origin,        // Ray origin, in world space
+		glm::vec3 ray_direction,     // Ray direction (NOT target position!), in world space. Must be normalize()'d.
+		glm::vec3 aabb_min,          // Minimum X,Y,Z coords of the mesh when not transformed at all.
+		glm::vec3 aabb_max,          // Maximum X,Y,Z coords. Often aabb_min*-1 if your mesh is centered, but it's not always the case.
+		glm::mat4 ModelMatrix,       // Transformation applied to the mesh (which will thus be also applied to its bounding box)
+		float& intersection_distance // Output : distance between ray_origin and the intersection with the OBB
+	);
 	void processInput(GLFWwindow* window);
-	glm::mat4 view;
+	
 	unsigned int hdrTexture;
-	float isSphere = true;
+	
 	bool firstMouse = true;
 	double lastX = 400;
 	double lastY = 300;
-	float YAW = -90.0f;
-	float PITCH = 0.0f;	
+	float YAW = 0.0f;
+	float PITCH = -90.0f;	
 	Camera camera;
-	glm::vec3 cameraPos = glm::vec3(0.0f, 0.5f, 6.0f);
-	glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+	glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 cameraFront = glm::vec3(0.0f, -1.f, 0.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 lightPositions[] = {
-	glm::vec3(0.f,  0.,10.0f),
+	glm::vec3(0.f,  5.,5.0f),
 	
 	};
 	glm::vec3 lightColors[] = {
-		glm::vec3(150.0f, 150.0f,150.0f),
+		glm::vec3(300.0f, 300.0f,300.0f),
 		
 	};
 	int nrRows = 7;
@@ -215,8 +227,57 @@ namespace Engine {
 
 
 	}
+	void ScreenPosToWorldRay(
+		int mouseX, int mouseY,             // Mouse position, in pixels, from bottom-left corner of the window
+		int screenWidth, int screenHeight,  // Window size, in pixels
+		glm::mat4 ViewMatrix,               // Camera position and orientation
+		glm::mat4 ProjectionMatrix,         // Camera parameters (ratio, field of view, near and far planes)
+		glm::vec3& out_origin,              // Ouput : Origin of the ray. /!\ Starts at the near plane, so if you want the ray to start at the camera's position instead, ignore this.
+		glm::vec3& out_direction            // Ouput : Direction, in world space, of the ray that goes "through" the mouse.
+	) {
+		mouseX -= 250.0f;
+		//screenWidth -= 250.0f;
+		// The ray Start and End positions, in Normalized Device Coordinates (Have you read Tutorial 4 ?)
+		glm::vec4 lRayStart_NDC(
+			((float)mouseX / (float)screenWidth - 0.5f) * 2.0f, // [0,1024] -> [-1,1]
+			((float)mouseY / (float)screenHeight - 0.5f) * 2.0f, // [0, 768] -> [-1,1]
+			-1.0, // The near plane maps to Z=-1 in Normalized Device Coordinates
+			1.0f
+		);
+		glm::vec4 lRayEnd_NDC(
+			((float)mouseX / (float)screenWidth - 0.5f) * 2.0f,
+			((float)mouseY / (float)screenHeight - 0.5f) * 2.0f,
+			0.0,
+			1.0f
+		);
+		glm::mat4 InverseProjectionMatrix = glm::inverse(ProjectionMatrix);
+
+		// The View Matrix goes from World Space to Camera Space.
+		// So inverse(ViewMatrix) goes from Camera Space to World Space.
+		glm::mat4 InverseViewMatrix = glm::inverse(ViewMatrix);
+
+		glm::vec4 lRayStart_camera = InverseProjectionMatrix * lRayStart_NDC;    lRayStart_camera /= lRayStart_camera.w;
+		glm::vec4 lRayStart_world = InverseViewMatrix * lRayStart_camera; lRayStart_world /= lRayStart_world.w;
+		glm::vec4 lRayEnd_camera = InverseProjectionMatrix * lRayEnd_NDC;      lRayEnd_camera /= lRayEnd_camera.w;
+		glm::vec4 lRayEnd_world = InverseViewMatrix * lRayEnd_camera;   lRayEnd_world /= lRayEnd_world.w;
+
+
+		// Faster way (just one inverse)
+		//glm::mat4 M = glm::inverse(ProjectionMatrix * ViewMatrix);
+		//glm::vec4 lRayStart_world = M * lRayStart_NDC; lRayStart_world/=lRayStart_world.w;
+		//glm::vec4 lRayEnd_world   = M * lRayEnd_NDC  ; lRayEnd_world  /=lRayEnd_world.w;
+
+
+		glm::vec3 lRayDir_world(lRayEnd_world - lRayStart_world);
+		lRayDir_world = glm::normalize(lRayDir_world);
+
+
+		out_origin = glm::vec3(lRayStart_world);
+		out_direction = glm::normalize(lRayDir_world);
+	}
 	void FrameBufferCallback(GLFWwindow* window, int width, int height)
 	{
+		mousePicker.SetDims(width,height);
 		WindowProperties::Height = (float)height;
 		WindowProperties::Width = (float)width;
 		std::cout << WindowProperties::Height << std::endl;
@@ -251,36 +312,37 @@ namespace Engine {
 
 	void cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 	{
-		if (firstMouse)
-		{
+		if (input) {
+			if (firstMouse)
+			{
+				lastX = xpos;
+				lastY = ypos;
+				firstMouse = false;
+			}
+
+			float xoffset = xpos - lastX;
+			float yoffset = lastY - ypos;
 			lastX = xpos;
 			lastY = ypos;
-			firstMouse = false;
+
+			float sensitivity = 0.1f;
+			xoffset *= sensitivity;
+			yoffset *= sensitivity;
+
+			YAW += xoffset;
+			PITCH += yoffset;
+
+			if (PITCH > 89.0f)
+				PITCH = 89.0f;
+			if (PITCH < -89.0f)
+				PITCH = -89.0f;
+
+			glm::vec3 direction;
+			direction.x = cos(glm::radians(YAW)) * cos(glm::radians(PITCH));
+			direction.y = sin(glm::radians(PITCH));
+			direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
+			cameraFront = glm::normalize(direction);
 		}
-
-		float xoffset = xpos - lastX;
-		float yoffset = lastY - ypos;
-		lastX = xpos;
-		lastY = ypos;
-
-		float sensitivity = 0.1f;
-		xoffset *= sensitivity;
-		yoffset *= sensitivity;
-
-		YAW += xoffset;
-		PITCH += yoffset;
-
-		if (PITCH > 89.0f)
-			PITCH = 89.0f;
-		if (PITCH < -89.0f)
-			PITCH = -89.0f;
-
-		glm::vec3 direction;
-		direction.x = cos(glm::radians(YAW)) * cos(glm::radians(PITCH));
-		direction.y = sin(glm::radians(PITCH));
-		direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
-		cameraFront = glm::normalize(direction);
-		
 	}
 	Window::Window(std::string name, int Width, int Height)
 	{
@@ -311,7 +373,7 @@ namespace Engine {
 		glEnable(GL_MULTISAMPLE);
 
 
-		//glfwSetCursorPosCallback(WindowProperties::window, cursorPosCallback);
+		glfwSetCursorPosCallback(WindowProperties::window, cursorPosCallback);
 
 		glfwSetFramebufferSizeCallback(WindowProperties::window, FrameBufferCallback);
 
@@ -342,22 +404,21 @@ namespace Engine {
 		ResourceManager::LoadTexture("ao", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\ao.png");
 		ResourceManager::LoadTexture("normal", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\normal.png");
 		
-		ResourceManager::LoadTexture("albedof", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\albedo.png");
-		ResourceManager::LoadTexture("metallicf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\metallic.png");
-		ResourceManager::LoadTexture("roughnessf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\roughness.png");
+		ResourceManager::LoadTexture("albedof", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\albedo2.png");
+		ResourceManager::LoadTexture("metallicf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\metallic2.png");
+		ResourceManager::LoadTexture("roughnessf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\roughness2.png");
 		ResourceManager::LoadTexture("aof", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\ao.png");
 
-		ResourceManager::LoadTexture("normalf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\normal.png");
+		ResourceManager::LoadTexture("normalf", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\floor\\normal2.png");
 
 		Shader pbrShader = ResourceManager::GetShader("pbr");
 		pbrShader.Use();
 	
-		
-		pbrShader.SetInt1("albedoMap", 0);
-		pbrShader.SetInt1("normalMap", 1);
-		pbrShader.SetInt1("metallicMap", 2);
-		pbrShader.SetInt1("roughnessMap", 3);
-		pbrShader.SetInt1("aoMap", 4);
+		pbrShader.SetInt1("albedoMap1", 0);
+		pbrShader.SetInt1("normalMap1", 1);
+		pbrShader.SetInt1("metallicMap1", 2);
+		pbrShader.SetInt1("roughnessMap1", 3);
+		pbrShader.SetInt1("aoMap1", 4);
 		stbi_set_flip_vertically_on_load(true);
 		int width, height, nrComponents;
 		float* data = stbi_loadf("./src/Textures/cubemap/Mt-Washington-Gold-Room_Ref.hdr", &width, &height, &nrComponents, 0);
@@ -409,47 +470,47 @@ namespace Engine {
 		// ------------------------------------------------------------------
 		float vertices[] = {
 			// positions          // normals           // texture coords
-			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
-			 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
-			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
-			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
-			-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
-			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+			-1.0f	, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+			 1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
+			 1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+			 1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+			-1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
+			-1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
 
-			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   0.0f, 0.0f,
-			 0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   1.0f, 0.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   1.0f, 1.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   1.0f, 1.0f,
-			-0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   0.0f, 1.0f,
-			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,   0.0f, 0.0f,
+			-1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f,   0.0f, 0.0f,
+			 1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f,   1.0f, 0.0f,
+			 1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f,   1.0f, 1.0f,
+			 1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f,   1.0f, 1.0f,
+			-1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f,   0.0f, 1.0f,
+			-1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f,   0.0f, 0.0f,
 
-			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
-			-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
-			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
-			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
-			-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
-			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+			-1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+			-1.0f,  1.0f, -1.0f, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+			-1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			-1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			-1.0f, -1.0f,  1.0f, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+			-1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
 
-			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
-			 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
-			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
-			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
-			 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
-			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+			 1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+			 1.0f,  1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+			 1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			 1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+			 1.0f, -1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+			 1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
 
-			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
-			 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 1.0f,
-			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
-			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
-			-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 0.0f,
-			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
+			-1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
+			 1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f,  1.0f, 1.0f,
+			 1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
+			 1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
+			-1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f,  0.0f, 0.0f,
+			-1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
 
-			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f,
-			 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 1.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
-			-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 0.0f,
-			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f
+			-1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f,
+			 1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f,  1.0f, 1.0f,
+			 1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
+			 1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
+			-1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f,  0.0f, 0.0f,
+			-1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f
 		};
 		float quadVertices[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
 			 // positions   // texCoords
@@ -550,7 +611,8 @@ namespace Engine {
 		Shader pbrShader = ResourceManager::GetShader("pbr");
 		Shader cubemapShader = ResourceManager::GetShader("cubemap");
 
-
+		float total = 0;
+		bool  setInput = true;
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glm::mat4 lightModel  = glm::mat4(1.0f);
 		while (!glfwWindowShouldClose(WindowProperties::window))
@@ -559,16 +621,41 @@ namespace Engine {
 
 		
 			processInput(WindowProperties::window);
+			if (glfwGetKey(WindowProperties::window, GLFW_KEY_P))
+			{
+				if (!input)
+				{
+					glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+					firstMouse = true;
+					input = !input;
+				}
+				else
+				{
+
+					glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+					input = !input;
+				}
+					
+	}
+		
 
 			view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 			projection = glm::perspective(glm::radians(45.f), (WindowProperties::Width - 250.f) / WindowProperties::Height, 0.1f, 100.0f);
-
+			double y = 0;
+			double x = 0;	
+			glfwGetCursorPos(WindowProperties::window, &x, &y);
+			//std::cout << "X :"<<x << " Y: " <<y << ", ";
+			mousePicker.Update(view, projection,x, y);
+		
 			//Fps counter
 			timer.currentTime = glfwGetTime();
 			timer.deltaTime = timer.currentTime - timer.lastTime;
 			timer.lastTime = timer.currentTime;
-			//If you want to display fps -> std::cout << 1. / timer.deltaTime;
-
+			total += timer.deltaTime;
+			if (total > 1.0f) {
+				total = 0.0f;
+				//std::cout << mousePicker.GetCurrentRay().x << " " << mousePicker.GetCurrentRay().y << " " << mousePicker.GetCurrentRay().z << "," << std::endl;	// std::cout << 1. / timer.deltaTime << '\n';
+			}
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 			glEnable(GL_DEPTH_TEST); // enable depth testing (is disabled for rendering screen-space quad)
 			glClearColor(0.0f, 0.0, 0.0f, 1.0f);
@@ -576,6 +663,7 @@ namespace Engine {
 
 			
 			glm::mat4 model = glm::mat4(1.0f);
+			//odel = glm::scale(model, glm::vec3(10.0f, 0.1f, 10.0f));
 			//model = glm::scale(model, glm::vec3(10.0f, 0.2f, 10.0f));
 			pbrShader.Use();
 			pbrShader.SetMat4("projection", projection);
@@ -604,36 +692,71 @@ namespace Engine {
 				
 			}
 		
-			
+		
 			
 			glBindVertexArray(VAOS);
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedo"));
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedof"));
 			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normal"));
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normalf"));
 			
 
 			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallic"));
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallicf"));
 			glActiveTexture(GL_TEXTURE3);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughness"));
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughnessf"));
 			glActiveTexture(GL_TEXTURE4);
 			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("ao"));
+			glBindVertexArray(VAO);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
 
 			//glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
 		
 			
-			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+			//glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
 			/*
 			cubemapShader.Use();
 			cubemapShader.SetMat4("projection", projection);
 			cubemapShader.SetMat4("view", view);
 			cubemapShader.SetInt1("equirectangularMap", 0.0f);
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, hdrTexture);
-			glBindVertexArray(VAO);
-			glDrawArrays(GL_TRIANGLES, 0, 36);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedof"));
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normalf"));
+
+
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallicf"));
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughnessf"));
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("aof"));
+			//glBindVertexArray(VAO);
+			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
 			*/
+			float inter;
+
+			float intersection_distance; // Output of TestRayOBBIntersection()
+			glm::vec3 aabb_min(-1.f, -1.f, -1.);
+			glm::vec3 aabb_max(1.f, 1., 1.f);
+
+			// The ModelMatrix transforms :
+			// - the mesh to its desired position and orientation
+			// - but also the AABB (defined with aabb_min and aabb_max) into an OBB
+		
+		
+
+			if (TestRayOBBIntersection(
+				cameraPos,
+				mousePicker.GetCurrentRay(),
+				
+				aabb_min,
+				aabb_max,
+				model,
+				intersection_distance)
+				) {
+				std::cout << "1";
+			}
 
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 			glBlitFramebuffer(0, 0, WindowProperties::Width-250, WindowProperties::Height, 0, 0,WindowProperties::Width-250., WindowProperties::Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -648,7 +771,7 @@ namespace Engine {
 			glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 
-			//std::cout << glGetError();
+			
 			ImGui_ImplOpenGL3_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
@@ -728,5 +851,123 @@ namespace Engine {
 			cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 			cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	}
+	bool TestRayOBBIntersection(
+		glm::vec3 ray_origin,        // Ray origin, in world space
+		glm::vec3 ray_direction,     // Ray direction (NOT target position!), in world space. Must be normalize()'d.
+		glm::vec3 aabb_min,          // Minimum X,Y,Z coords of the mesh when not transformed at all.
+		glm::vec3 aabb_max,          // Maximum X,Y,Z coords. Often aabb_min*-1 if your mesh is centered, but it's not always the case.
+		glm::mat4 ModelMatrix,       // Transformation applied to the mesh (which will thus be also applied to its bounding box)
+		float& intersection_distance // Output : distance between ray_origin and the intersection with the OBB
+	) {
+
+		// Intersection method from Real-Time Rendering and Essential Mathematics for Games
+
+		float tMin = 0.0f;
+		float tMax = 100000.0f;
+
+		glm::vec3 OBBposition_worldspace(ModelMatrix[3].x, ModelMatrix[3].y, ModelMatrix[3].z);
+
+		glm::vec3 delta = OBBposition_worldspace - ray_origin;
+
+		// Test intersection with the 2 planes perpendicular to the OBB's X axis
+		{
+			glm::vec3 xaxis(ModelMatrix[0].x, ModelMatrix[0].y, ModelMatrix[0].z);
+			float e = glm::dot(xaxis, delta);
+			float f = glm::dot(ray_direction, xaxis);
+
+			if (fabs(f) > 0.001f) { // Standard case
+
+				float t1 = (e + aabb_min.x) / f; // Intersection with the "left" plane
+				float t2 = (e + aabb_max.x) / f; // Intersection with the "right" plane
+				// t1 and t2 now contain distances betwen ray origin and ray-plane intersections
+
+				// We want t1 to represent the nearest intersection, 
+				// so if it's not the case, invert t1 and t2
+				if (t1 > t2) {
+					float w = t1; t1 = t2; t2 = w; // swap t1 and t2
+				}
+
+				// tMax is the nearest "far" intersection (amongst the X,Y and Z planes pairs)
+				if (t2 < tMax)
+					tMax = t2;
+				// tMin is the farthest "near" intersection (amongst the X,Y and Z planes pairs)
+				if (t1 > tMin)
+					tMin = t1;
+
+				// And here's the trick :
+				// If "far" is closer than "near", then there is NO intersection.
+				// See the images in the tutorials for the visual explanation.
+				if (tMax < tMin)
+					return false;
+
+			}
+			else { // Rare case : the ray is almost parallel to the planes, so they don't have any "intersection"
+				if (-e + aabb_min.x > 0.0f || -e + aabb_max.x < 0.0f)
+					return false;
+			}
+		}
+
+
+		// Test intersection with the 2 planes perpendicular to the OBB's Y axis
+		// Exactly the same thing than above.
+		{
+			glm::vec3 yaxis(ModelMatrix[1].x, ModelMatrix[1].y, ModelMatrix[1].z);
+			float e = glm::dot(yaxis, delta);
+			float f = glm::dot(ray_direction, yaxis);
+
+			if (fabs(f) > 0.001f) {
+
+				float t1 = (e + aabb_min.y) / f;
+				float t2 = (e + aabb_max.y) / f;
+
+				if (t1 > t2) { float w = t1; t1 = t2; t2 = w; }
+
+				if (t2 < tMax)
+					tMax = t2;
+				if (t1 > tMin)
+					tMin = t1;
+				if (tMin > tMax)
+					return false;
+
+			}
+			else {
+				if (-e + aabb_min.y > 0.0f || -e + aabb_max.y < 0.0f)
+					return false;
+			}
+		}
+
+
+		// Test intersection with the 2 planes perpendicular to the OBB's Z axis
+		// Exactly the same thing than above.
+		{
+			glm::vec3 zaxis(ModelMatrix[2].x, ModelMatrix[2].y, ModelMatrix[2].z);
+			float e = glm::dot(zaxis, delta);
+			float f = glm::dot(ray_direction, zaxis);
+
+			if (fabs(f) > 0.001f) {
+
+				float t1 = (e + aabb_min.z) / f;
+				float t2 = (e + aabb_max.z) / f;
+
+				if (t1 > t2) { float w = t1; t1 = t2; t2 = w; }
+
+				if (t2 < tMax)
+					tMax = t2;
+				if (t1 > tMin)
+					tMin = t1;
+				if (tMin > tMax)
+					return false;
+
+			}
+			else {
+				if (-e + aabb_min.z > 0.0f || -e + aabb_max.z < 0.0f)
+					return false;
+			}
+		}
+
+		intersection_distance = tMin;
+		return true;
+
 	}
 };

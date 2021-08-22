@@ -7,6 +7,7 @@
 #include "imgui.h"
 #include "Camera.h"
 #include "imgui_impl_glfw.h"
+#include "MousePicker.h"
 #include "imgui_impl_opengl3.h"
 namespace Engine
 {
