@@ -2,7 +2,7 @@
 
 int main()
 {
-	Engine::Window*  window = new Engine::Window("OpenGL",1920,900
+	Engine::Window*  window = new Engine::Window("Lighting Demo",1920,900
 	
 	
 	
