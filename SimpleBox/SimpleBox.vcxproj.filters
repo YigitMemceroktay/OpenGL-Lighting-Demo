@@ -125,6 +125,16 @@
     <None Include="src\Shaders\Pbrcubefs.glsl" />
     <None Include="src\Shaders\Cubemapfs.glsl" />
     <None Include="src\Shaders\Cubemapvs.glsl" />
+    <None Include="src\Shaders\Eqvs.glsl" />
+    <None Include="src\Shaders\Eqfs.glsl" />
+    <None Include="src\Shaders\Pbrntvs.glsl" />
+    <None Include="src\Shaders\Pbrntfs.glsl" />
+    <None Include="src\Shaders\Irradiancefs.glsl" />
+    <None Include="src\Shaders\Irradiancevs.glsl" />
+    <None Include="src\Shaders\Brdfvs.glsl" />
+    <None Include="src\Shaders\Brdffs.glsl" />
+    <None Include="src\Shaders\Prefiltervs.glsl" />
+    <None Include="src\Shaders\Prefilterfs.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="src\OpenGL\font.ttf" />

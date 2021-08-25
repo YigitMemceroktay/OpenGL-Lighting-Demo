@@ -7,343 +7,91 @@ namespace Engine {
 	float WindowProperties::Height;
 	std::string WindowProperties::Name;
 	GLFWwindow* WindowProperties::window;
+
 	glm::mat4 view;
 	glm::mat4 projection;
-	bool input = false;
+	
+	bool input = true;
+	bool firstMouse = true;
 	MousePicker mousePicker(projection, view);
 
 	unsigned int framebuffer;
 	unsigned int textureColorbuffer;
 	unsigned int rbo;
-	void renderQuad();
+	unsigned int quadVAO1 = 0;
+	unsigned int quadVBO1;
+	void renderQuad()
+	{
+		if (quadVAO1 == 0)
+		{
+			float quadVertices[] = {
+				// positions        // texture Coords
+				-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+				-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+				 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+				 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+			};
+			// setup plane VAO
+			glGenVertexArrays(1, &quadVAO1);
+			glGenBuffers(1, &quadVBO1);
+			glBindVertexArray(quadVAO1);
+			glBindBuffer(GL_ARRAY_BUFFER, quadVBO1);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+			glEnableVertexAttribArray(1);
+			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+		}
+		glBindVertexArray(quadVAO1);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glBindVertexArray(0);
+	}
+	void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 	bool TestRayOBBIntersection(
 		glm::vec3 ray_origin,        // Ray origin, in world space
 		glm::vec3 ray_direction,     // Ray direction (NOT target position!), in world space. Must be normalize()'d.
 		glm::vec3 aabb_min,          // Minimum X,Y,Z coords of the mesh when not transformed at all.
 		glm::vec3 aabb_max,          // Maximum X,Y,Z coords. Often aabb_min*-1 if your mesh is centered, but it's not always the case.
-		glm::mat4 ModelMatrix,       // Transformation applied to the mesh (which will thus be also applied to its bounding box)
+		glm::mat4 ModelMatrix,  
+		glm::vec3 ModelMatrix1,    // Transformation applied to the mesh (which will thus be also applied to its bounding box)
 		float& intersection_distance // Output : distance between ray_origin and the intersection with the OBB
 	);
 	void processInput(GLFWwindow* window);
+	void createSphereVertices(float radius, int sectorCount, int stackCount);
+	void setUpImGui(GLFWwindow* window);
+	void FrameBufferCallback(GLFWwindow* window, int width, int height);
+	void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
+
+	double lastX = 1670;
+	double lastY = 900;
+	float YAW =  -90.0f;
+	float PITCH = 0.0f;	
 	
-	unsigned int hdrTexture;
-	
-	bool firstMouse = true;
-	double lastX = 400;
-	double lastY = 300;
-	float YAW = 0.0f;
-	float PITCH = -90.0f;	
-	Camera camera;
-	glm::vec3 cameraPos = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 cameraFront = glm::vec3(0.0f, -1.f, 0.0f);
+	glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 4.0f);
+	glm::vec3 cameraFront = glm::vec3(0.0f, 0.f, -1.0f);
 	glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
 	glm::vec3 lightPositions[] = {
-	glm::vec3(0.f,  5.,5.0f),
-	
+	glm::vec3(-10.0f,  10.0f, 10.0f),
+	glm::vec3(10.0f,  10.0f, 10.0f),
+	glm::vec3(-10.0f, -10.0f, 10.0f),
+	glm::vec3(10.0f, -10.0f, 10.0f),
 	};
 	glm::vec3 lightColors[] = {
-		glm::vec3(300.0f, 300.0f,300.0f),
-		
+		glm::vec3(300.0f, 300.0f, 300.0f),
+		glm::vec3(300.0f, 300.0f, 300.0f),
+		glm::vec3(300.0f, 300.0f, 300.0f),
+		glm::vec3(300.0f, 300.0f, 300.0f)
 	};
 	int nrRows = 7;
 	int nrColumns = 7;
-	float spacing = 2.5;
+	float spacing = 2.5;	
+
 
 	std::vector<float> vertices;
-
 	std::vector<unsigned int> indices;
 	std::vector<int> lineIndices;
-	void createSphereVertices(float radius, int sectorCount, int stackCount)
-	{
-		float PI = 3.1415;
-
-
-
-
-		float x, y, z, xy;                              // vertex position
-		float nx, ny, nz, lengthInv = 1.0f / radius;    // vertex normal
-		float s, t;                                     // vertex texCoord
-
-		float sectorStep = 2 * PI / sectorCount;
-		float stackStep = PI / stackCount;
-		float sectorAngle, stackAngle;
-
-		for (int i = 0; i <= stackCount; ++i)
-		{
-			stackAngle = PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
-			xy = radius * cosf(stackAngle);             // r * cos(u)
-			z = radius * sinf(stackAngle);              // r * sin(u)
-
-			// add (sectorCount+1) vertices per stack
-			// the first and last vertices have same position and normal, but different tex coords
-			for (int j = 0; j <= sectorCount; ++j)
-			{
-				sectorAngle = j * sectorStep;           // starting from 0 to 2pi
-
-				// vertex position (x, y, z)
-				x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
-				y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
-				vertices.push_back(x);
-				vertices.push_back(y);
-				vertices.push_back(z);
-
-				// normalized vertex normal (nx, ny, nz)
-				nx = x * lengthInv;
-				ny = y * lengthInv;
-				nz = z * lengthInv;
-				vertices.push_back(nx);
-				vertices.push_back(ny);
-				vertices.push_back(nz);
-
-				// vertex tex coord (s, t) range between [0, 1]
-				s = (float)j / sectorCount;
-				t = (float)i / stackCount;
-				vertices.push_back(s);
-				vertices.push_back(t);
-			}
-		}
-		// generate CCW index list of sphere triangles
-		// k1--k1+1
-		// |  / |
-		// | /  |
-		// k2--k2+1
-
-		int k1, k2;
-		for (int i = 0; i < stackCount; ++i)
-		{
-			k1 = i * (sectorCount + 1);     // beginning of current stack
-			k2 = k1 + sectorCount + 1;      // beginning of next stack
-
-			for (int j = 0; j < sectorCount; ++j, ++k1, ++k2)
-			{
-				// 2 triangles per sector excluding first and last stacks
-				// k1 => k2 => k1+1
-				if (i != 0)
-				{
-					indices.push_back(k1);
-					indices.push_back(k2);
-					indices.push_back(k1 + 1);
-				}
-
-				// k1+1 => k2 => k2+1
-				if (i != (stackCount - 1))
-				{
-					indices.push_back(k1 + 1);
-					indices.push_back(k2);
-					indices.push_back(k2 + 1);
-				}
-
-				// store indices for lines
-				// vertical lines for all stacks, k1 => k2
-				lineIndices.push_back(k1);
-				lineIndices.push_back(k2);
-				if (i != 0)  // horizontal lines except 1st stack, k1 => k+1
-				{
-					lineIndices.push_back(k1);
-					lineIndices.push_back(k1 + 1);
-				}
-			}
-		}
-	}
-
-	void setUpImGui(GLFWwindow* window)
-	{
-		ImGui::CreateContext();
-		//ImGui::SetFl
-		// Setup Platform/Renderer bindings
-		ImGui_ImplGlfw_InitForOpenGL(window, true);
-		ImGui_ImplOpenGL3_Init();
-
-		// Setup Dear ImGui style
-		ImGui::StyleColorsDark();
-		ImGuiStyle* style = &ImGui::GetStyle();
-		ImVec4* colors = style->Colors;
-		//style->WindowRounding = 10;
-		colors[ImGuiCol_Text] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
-		colors[ImGuiCol_TextDisabled] = ImVec4(0.44f, 0.44f, 0.44f, 1.00f);
-		colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
-		colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-		colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.94f);
-		colors[ImGuiCol_Border] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
-		colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-		colors[ImGuiCol_FrameBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-		colors[ImGuiCol_FrameBgHovered] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
-		colors[ImGuiCol_FrameBgActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
-		colors[ImGuiCol_TitleBg] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
-		colors[ImGuiCol_TitleBgActive] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
-		colors[ImGuiCol_MenuBarBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-		colors[ImGuiCol_ScrollbarBg] = ImVec4(0.06f, 0.06f, 0.06f, 0.53f);
-		colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.21f, 0.21f, 0.21f, 1.00f);
-		colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
-		colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.81f, 0.83f, 0.81f, 1.00f);
-		colors[ImGuiCol_CheckMark] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
-		colors[ImGuiCol_SliderGrab] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_SliderGrabActive] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_Button] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
-		colors[ImGuiCol_ButtonHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_ButtonActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
-		colors[ImGuiCol_Header] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
-		colors[ImGuiCol_HeaderHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_HeaderActive] = ImVec4(0.93f, 0.65f, 0.14f, 1.00f);
-		colors[ImGuiCol_Separator] = ImVec4(0.21f, 0.21f, 0.21f, 1.00f);
-		colors[ImGuiCol_SeparatorHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_SeparatorActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
-		colors[ImGuiCol_ResizeGrip] = ImVec4(0.21f, 0.21f, 0.21f, 1.00f);
-		colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_ResizeGripActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
-		colors[ImGuiCol_Tab] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
-		colors[ImGuiCol_TabHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
-		colors[ImGuiCol_TabActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
-		colors[ImGuiCol_TabUnfocused] = ImVec4(0.07f, 0.10f, 0.15f, 0.97f);
-		colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.14f, 0.26f, 0.42f, 1.00f);
-		colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
-		colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
-		colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
-		colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
-		colors[ImGuiCol_TextSelectedBg] = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
-		colors[ImGuiCol_DragDropTarget] = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
-		colors[ImGuiCol_NavHighlight] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
-		colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
-		colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-		colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
-
-		style->FramePadding = ImVec2(20, 2);
-		style->ItemSpacing = ImVec2(10, 10);
-		style->IndentSpacing = 12;
-		style->ScrollbarSize = 10;
-
-		style->WindowRounding = 15;
-		style->FrameRounding = 4;
-		style->PopupRounding = 4;
-		style->ScrollbarRounding = 6;
-		style->GrabRounding = 4;
-		style->TabRounding = 4;
-
-		style->WindowTitleAlign = ImVec2(1.0f, 0.5f);
-		style->WindowMenuButtonPosition = ImGuiDir_Right;
-
-		style->DisplaySafeAreaPadding = ImVec2(1, 4);
-
-
-	}
-	void ScreenPosToWorldRay(
-		int mouseX, int mouseY,             // Mouse position, in pixels, from bottom-left corner of the window
-		int screenWidth, int screenHeight,  // Window size, in pixels
-		glm::mat4 ViewMatrix,               // Camera position and orientation
-		glm::mat4 ProjectionMatrix,         // Camera parameters (ratio, field of view, near and far planes)
-		glm::vec3& out_origin,              // Ouput : Origin of the ray. /!\ Starts at the near plane, so if you want the ray to start at the camera's position instead, ignore this.
-		glm::vec3& out_direction            // Ouput : Direction, in world space, of the ray that goes "through" the mouse.
-	) {
-		mouseX -= 250.0f;
-		//screenWidth -= 250.0f;
-		// The ray Start and End positions, in Normalized Device Coordinates (Have you read Tutorial 4 ?)
-		glm::vec4 lRayStart_NDC(
-			((float)mouseX / (float)screenWidth - 0.5f) * 2.0f, // [0,1024] -> [-1,1]
-			((float)mouseY / (float)screenHeight - 0.5f) * 2.0f, // [0, 768] -> [-1,1]
-			-1.0, // The near plane maps to Z=-1 in Normalized Device Coordinates
-			1.0f
-		);
-		glm::vec4 lRayEnd_NDC(
-			((float)mouseX / (float)screenWidth - 0.5f) * 2.0f,
-			((float)mouseY / (float)screenHeight - 0.5f) * 2.0f,
-			0.0,
-			1.0f
-		);
-		glm::mat4 InverseProjectionMatrix = glm::inverse(ProjectionMatrix);
-
-		// The View Matrix goes from World Space to Camera Space.
-		// So inverse(ViewMatrix) goes from Camera Space to World Space.
-		glm::mat4 InverseViewMatrix = glm::inverse(ViewMatrix);
-
-		glm::vec4 lRayStart_camera = InverseProjectionMatrix * lRayStart_NDC;    lRayStart_camera /= lRayStart_camera.w;
-		glm::vec4 lRayStart_world = InverseViewMatrix * lRayStart_camera; lRayStart_world /= lRayStart_world.w;
-		glm::vec4 lRayEnd_camera = InverseProjectionMatrix * lRayEnd_NDC;      lRayEnd_camera /= lRayEnd_camera.w;
-		glm::vec4 lRayEnd_world = InverseViewMatrix * lRayEnd_camera;   lRayEnd_world /= lRayEnd_world.w;
-
-
-		// Faster way (just one inverse)
-		//glm::mat4 M = glm::inverse(ProjectionMatrix * ViewMatrix);
-		//glm::vec4 lRayStart_world = M * lRayStart_NDC; lRayStart_world/=lRayStart_world.w;
-		//glm::vec4 lRayEnd_world   = M * lRayEnd_NDC  ; lRayEnd_world  /=lRayEnd_world.w;
-
-
-		glm::vec3 lRayDir_world(lRayEnd_world - lRayStart_world);
-		lRayDir_world = glm::normalize(lRayDir_world);
-
-
-		out_origin = glm::vec3(lRayStart_world);
-		out_direction = glm::normalize(lRayDir_world);
-	}
-	void FrameBufferCallback(GLFWwindow* window, int width, int height)
-	{
-		mousePicker.SetDims(width,height);
-		WindowProperties::Height = (float)height;
-		WindowProperties::Width = (float)width;
-		std::cout << WindowProperties::Height << std::endl;
-		std::cout << WindowProperties::Width << std::endl;
-		glViewport(0., 0., width-250, height);
-		
-		glDeleteFramebuffers(1, &framebuffer);
-		glGenFramebuffers(1, &framebuffer);
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-		// create a color attachment texture
-
-		//glGenTextures(1, &textureColorbuffer);
-		glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width- 250, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
-		// create a renderbuffer object for depth and stencil attachment (we won't be sampling these)
-
-		//glGenRenderbuffers(1, &rbo);
-		glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width-250, height); // use a single renderbuffer object for both a depth AND stencil buffer.
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
-		// now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
-		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			//	cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << endl;
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		
-		
-
-	}
-
-	void cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
-	{
-		if (input) {
-			if (firstMouse)
-			{
-				lastX = xpos;
-				lastY = ypos;
-				firstMouse = false;
-			}
-
-			float xoffset = xpos - lastX;
-			float yoffset = lastY - ypos;
-			lastX = xpos;
-			lastY = ypos;
-
-			float sensitivity = 0.1f;
-			xoffset *= sensitivity;
-			yoffset *= sensitivity;
-
-			YAW += xoffset;
-			PITCH += yoffset;
-
-			if (PITCH > 89.0f)
-				PITCH = 89.0f;
-			if (PITCH < -89.0f)
-				PITCH = -89.0f;
-
-			glm::vec3 direction;
-			direction.x = cos(glm::radians(YAW)) * cos(glm::radians(PITCH));
-			direction.y = sin(glm::radians(PITCH));
-			direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
-			cameraFront = glm::normalize(direction);
-		}
-	}
+	
 	Window::Window(std::string name, int Width, int Height)
 	{
 		WindowProperties::Name = name;
@@ -369,17 +117,20 @@ namespace Engine {
 			std::cout << "Failed to initialize OpenGL context" << std::endl;
 
 		}
-		glViewport(0, 0, 1670., 1080.);
+		glViewport(0, 0, 1670., 900.);
 		glEnable(GL_MULTISAMPLE);
 
 
-		glfwSetCursorPosCallback(WindowProperties::window, cursorPosCallback);
+	//	glfwSetCursorPosCallback(WindowProperties::window, cursorPosCallback);
 
 		glfwSetFramebufferSizeCallback(WindowProperties::window, FrameBufferCallback);
-
+		glfwSetKeyCallback(WindowProperties::window, key_callback);
 		//glEnable(GL_BLEND);
+		    // -----------------------------
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL); // set depth function to less than AND equal for skybox depth trick.
 
-		//glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 		ResourceManager::LoadShader("default",
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Defaultvs.glsl",
@@ -390,12 +141,24 @@ namespace Engine {
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Framefs.glsl"
 		);
 		ResourceManager::LoadShader("pbr"
-			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrvs.glsl",
-			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrfs.glsl");
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrntvs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Pbrntfs.glsl");
 
 		ResourceManager::LoadShader("cubemap"
 			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Cubemapvs.glsl",
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Cubemapfs.glsl");
+		ResourceManager::LoadShader("eq"
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Eqvs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Eqfs.glsl");
+		ResourceManager::LoadShader("irradiance"
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Irradiancevs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Irradiancefs.glsl");
+		ResourceManager::LoadShader("brdf"
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Brdfvs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Brdffs.glsl");
+		ResourceManager::LoadShader("prefilter"
+			, "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Prefiltervs.glsl",
+			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Prefilterfs.glsl");
 		Shader defaultShader = ResourceManager::GetShader("default");
 
 		ResourceManager::LoadTexture("albedo", "C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Textures\\metal\\albedo.png");
@@ -419,27 +182,7 @@ namespace Engine {
 		pbrShader.SetInt1("metallicMap1", 2);
 		pbrShader.SetInt1("roughnessMap1", 3);
 		pbrShader.SetInt1("aoMap1", 4);
-		stbi_set_flip_vertically_on_load(true);
-		int width, height, nrComponents;
-		float* data = stbi_loadf("./src/Textures/cubemap/Mt-Washington-Gold-Room_Ref.hdr", &width, &height, &nrComponents, 0);
 		
-		if (data)
-		{
-			glGenTextures(1, &hdrTexture);
-			glBindTexture(GL_TEXTURE_2D, hdrTexture);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, data);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-			stbi_image_free(data);
-		}
-		else
-		{
-			std::cout << "Failed to load HDR image." << std::endl;
-		}
 
 	}
 
@@ -566,7 +309,7 @@ namespace Engine {
 		
 		glGenTextures(1, &textureColorbuffer);
 		glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1670, 1080, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, 1670, 900, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
@@ -574,7 +317,7 @@ namespace Engine {
 		
 		glGenRenderbuffers(1, &rbo);
 		glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1670, 1080); // use a single renderbuffer object for both a depth AND stencil buffer.
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1670, 900); // use a single renderbuffer object for both a depth AND stencil buffer.
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
 		// now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -603,18 +346,229 @@ namespace Engine {
 		float rotate3 = 0;
 		float rotate4 = 0;
 		float roughness = 0.05;
-		float mettalic = 0.0f;
+		float mettalic = 0.8f;
 
 		// GET SHADERS
 		Shader defaultShader = ResourceManager::GetShader("default");
 		Shader screenShader = ResourceManager::GetShader("frame");
 		Shader pbrShader = ResourceManager::GetShader("pbr");
 		Shader cubemapShader = ResourceManager::GetShader("cubemap");
+		Shader irradianceShader = ResourceManager::GetShader("irradiance");
+		Shader prefilterShader = ResourceManager::GetShader("prefilter");
+		Shader brdfShader = ResourceManager::GetShader("brdf");
+		Shader eq = ResourceManager::GetShader("eq");
 
 		float total = 0;
 		bool  setInput = true;
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glm::mat4 lightModel  = glm::mat4(1.0f);
+
+
+		unsigned int captureFBO;
+		unsigned int captureRBO;
+		glGenFramebuffers(1, &captureFBO);
+		glGenRenderbuffers(1, &captureRBO);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+		glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
+
+
+		stbi_set_flip_vertically_on_load(true);
+		int width, height, nrComponents;
+		float* data = stbi_loadf("./src/Textures/cubemap/Mt-Washington-Gold-Room_Ref.hdr", &width, &height, &nrComponents, 0);
+		unsigned int hdrTexture;
+		if (data)
+		{
+			glGenTextures(1, &hdrTexture);
+			glBindTexture(GL_TEXTURE_2D, hdrTexture);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, data); // note how we specify the texture's data value to be float
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+			stbi_image_free(data);
+		}
+		else
+		{
+			std::cout << "Failed to load HDR image." << std::endl;
+		}
+
+		// pbr: setup cubemap to render to and attach to framebuffer
+		// ---------------------------------------------------------
+		unsigned int envCubemap;
+		glGenTextures(1, &envCubemap);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+		for (unsigned int i = 0; i < 6; ++i)
+		{
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, nullptr);
+		}
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		// pbr: set up projection and view matrices for capturing data onto the 6 cubemap face directions
+		// ----------------------------------------------------------------------------------------------
+		glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+		glm::mat4 captureViews[] =
+		{
+			glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+			glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+			glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+			glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+			glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+			glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+		};
+
+		// pbr: convert HDR equirectangular environment map to cubemap equivalent
+		// ----------------------------------------------------------------------
+		eq.Use();
+		eq.SetInt1("equirectangularMap", 0);
+		eq.SetMat4("projection", captureProjection);
+		//equirectangularToCubemapShader.setInt("equirectangularMap", 0);
+		//equirectangularToCubemapShader.setMat4("projection", captureProjection);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, hdrTexture);
+
+		glViewport(0, 0, 512, 512); // don't forget to configure the viewport to the capture dimensions.
+		glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+		for (unsigned int i = 0; i < 6; ++i)
+		{
+			eq.SetMat4("view", captureViews[i]);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, envCubemap, 0);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			
+			glBindVertexArray(VAO);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+		}
+		unsigned int irradianceMap;
+		glGenTextures(1, &irradianceMap);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+		for (unsigned int i = 0; i < 6; ++i)
+		{
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 32, 32, 0, GL_RGB, GL_FLOAT, nullptr);
+		}
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+		glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 32, 32);
+
+		// pbr: solve diffuse integral by convolution to create an irradiance (cube)map.
+		// -----------------------------------------------------------------------------
+		irradianceShader.Use();
+		irradianceShader.SetInt1("environmentMap", 0);
+		irradianceShader.SetMat4("projection", captureProjection);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+		glViewport(0, 0, 32, 32); // don't forget to configure the viewport to the capture dimensions.
+		glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+		for (unsigned int i = 0; i < 6; ++i)
+		{
+			irradianceShader.SetMat4("view", captureViews[i]);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, irradianceMap, 0);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			//renderCube();
+			
+			glBindVertexArray(VAO);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// pbr: create a pre-filter cubemap, and re-scale capture FBO to pre-filter scale.
+		// --------------------------------------------------------------------------------
+		unsigned int prefilterMap;
+		glGenTextures(1, &prefilterMap);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
+		for (unsigned int i = 0; i < 6; ++i)
+		{
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, nullptr);
+		}
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); // be sure to set minification filter to mip_linear 
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		// generate mipmaps for the cubemap so OpenGL automatically allocates the required memory.
+		glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+		// pbr: run a quasi monte-carlo simulation on the environment lighting to create a prefilter (cube)map.
+		// ----------------------------------------------------------------------------------------------------
+		prefilterShader.Use();
+		prefilterShader.SetInt1("environmentMap", 0);
+		prefilterShader.SetMat4("projection", captureProjection);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+		unsigned int maxMipLevels = 5;
+		for (unsigned int mip = 0; mip < maxMipLevels; ++mip)
+		{
+			// reisze framebuffer according to mip-level size.
+			unsigned int mipWidth = 128 * std::pow(0.5, mip);
+			unsigned int mipHeight = 128 * std::pow(0.5, mip);
+			glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+			glViewport(0, 0, mipWidth, mipHeight);
+
+			float roughness = (float)mip / (float)(maxMipLevels - 1);
+			prefilterShader.SetFloat1("roughness", roughness);
+			for (unsigned int i = 0; i < 6; ++i)
+			{
+				prefilterShader.SetMat4("view", captureViews[i]);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, prefilterMap, mip);
+
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				glBindVertexArray(VAO);
+				glDrawArrays(GL_TRIANGLES, 0, 36);
+			}
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// pbr: generate a 2D LUT from the BRDF equations used.
+		// ----------------------------------------------------
+		unsigned int brdfLUTTexture;
+		glGenTextures(1, &brdfLUTTexture);
+
+		// pre-allocate enough memory for the LUT texture.
+		glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, 0);
+		// be sure to set wrapping mode to GL_CLAMP_TO_EDGE
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		// then re-configure capture framebuffer object and render screen-space quad with BRDF shader.
+		glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+		glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, brdfLUTTexture, 0);
+
+		glViewport(0, 0, 512, 512);
+		brdfShader.Use();
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		renderQuad();
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0,1670, 900); // don't forget to configure the viewport to the capture dimensions.
+		float distance = 3.0f;
 		while (!glfwWindowShouldClose(WindowProperties::window))
 		{
 			
@@ -623,29 +577,29 @@ namespace Engine {
 			processInput(WindowProperties::window);
 			if (glfwGetKey(WindowProperties::window, GLFW_KEY_P))
 			{
-				if (!input)
-				{
-					glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-					firstMouse = true;
-					input = !input;
-				}
-				else
-				{
-
-					glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-					input = !input;
-				}
-					
+				
 	}
-		
+			
+			YAW = -90.0f;
+			YAW -= rotate1;
+			
 
+
+			glm::vec3 direction;
+			direction.x = cos(glm::radians(YAW)) * cos(glm::radians(PITCH));
+			direction.y = sin(glm::radians(PITCH));
+			direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
+						cameraFront = glm::normalize(direction);
+			cameraPos.z = distance*glm::cos(glm::radians(rotate1));
+		cameraPos.x = distance* glm::sin(glm::radians(rotate1));
 			view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
 			projection = glm::perspective(glm::radians(45.f), (WindowProperties::Width - 250.f) / WindowProperties::Height, 0.1f, 100.0f);
 			double y = 0;
 			double x = 0;	
 			glfwGetCursorPos(WindowProperties::window, &x, &y);
-			//std::cout << "X :"<<x << " Y: " <<y << ", ";
-			mousePicker.Update(view, projection,x, y);
+			
+			// std::cout << "X :"<<x << " Y: " <<y << ", ";
+			//mousePicker.Update(view, projection,x, y);
 		
 			//Fps counter
 			timer.currentTime = glfwGetTime();
@@ -664,76 +618,115 @@ namespace Engine {
 			
 			glm::mat4 model = glm::mat4(1.0f);
 			//odel = glm::scale(model, glm::vec3(10.0f, 0.1f, 10.0f));
-			//model = glm::scale(model, glm::vec3(10.0f, 0.2f, 10.0f));
+			//model = glm::translate(model, glm::vec3(0.0f, 0.f,-distance));
 			pbrShader.Use();
+	
 			pbrShader.SetMat4("projection", projection);
 			pbrShader.SetMat4("view", view);
 			pbrShader.SetMat4("model", model);
 			pbrShader.SetFloat3("camPos", cameraPos);		
 			pbrShader.SetFloat3("albedo", glm::vec3(colors1[0],colors1[1],colors1[2]));
+			pbrShader.SetFloat1("ao", 1.0f);
 		
+		
+		
+			pbrShader.SetInt1("irradianceMap", 0);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+			pbrShader.SetInt1("prefilterMap", 1);
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
+			pbrShader.SetInt1("brdfLUT", 2);
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
+			glBindVertexArray(VAOS);
+
+
+			pbrShader.SetFloat1("metallic", mettalic);
+			pbrShader.SetFloat1("roughness", roughness);
+			pbrShader.SetMat4("model", model);
+
 			for (unsigned int i = 0; i < sizeof(lightPositions) / sizeof(lightPositions[0]); ++i)
 			{
-				lightModel = glm::mat4(1.0f);
-				if(i == 0)
-					lightModel = glm::rotate(lightModel, glm::radians(rotate1), glm::vec3(0., 1., 0.));
-				else if(i == 1)
-					lightModel = glm::rotate(lightModel, glm::radians(rotate2), glm::vec3(0., 1., 0.));
-				else if(i == 2)
-					lightModel = glm::rotate(lightModel, glm::radians(rotate3), glm::vec3(0., 1., 0.));
-				else if(i == 3)
-					lightModel = glm::rotate(lightModel, glm::radians(rotate4), glm::vec3(0., 1., 0.));
-				lightModel = glm::translate(lightModel,lightPositions[i]);
-
-				glm::vec3 newPos;
+				glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
 				newPos = lightPositions[i];
-				pbrShader.SetFloat3(("lightPosition[" + std::to_string(i) + "]").c_str(),glm::mat3(lightModel)*newPos);
+				pbrShader.SetFloat3(("lightPosition[" + std::to_string(i) + "]").c_str(), newPos);
 				pbrShader.SetFloat3(("lightColors[" + std::to_string(i) + "]").c_str(), lightColors[i]);
-				
-			}
-		
-		
-			
-			glBindVertexArray(VAOS);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedof"));
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normalf"));
-			
 
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallicf"));
-			glActiveTexture(GL_TEXTURE3);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughnessf"));
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("ao"));
+			
+			}
+
+
+			glBindVertexArray(VAOS);
+			//glDrawArrays(GL_TRIANGLES, 0, 36);
+			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+		/*
+			for (int row = 0; row < nrRows; ++row)
+			{
+				pbrShader.SetFloat1("metallic", (float)row / (float)nrRows);
+				for (int col = 0; col < nrColumns; ++col)
+				{
+					// we clamp the roughness to 0.025 - 1.0 as perfectly smooth surfaces (roughness of 0.0) tend to look a bit off
+					// on direct lighting.
+				pbrShader.SetFloat1("roughness", glm::clamp((float)col / (float)nrColumns, 0.05f, 1.0f));
+
+					model = glm::mat4(1.0f);
+					model = glm::translate(model, glm::vec3(
+						(float)(col - (nrColumns / 2)) * spacing,
+						(float)(row - (nrRows / 2)) * spacing,
+						-2.0f
+					));
+					pbrShader.SetMat4("model", model);
+					glBindVertexArray(VAOS);
+					//glDrawArrays(GL_TRIANGLES, 0, 36);
+					glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+				}
+			}
+
+
+			// render light source (simply re-render sphere at light positions)
+			// this looks a bit off as we use the same shader, but it'll make their positions obvious and 
+			// keeps the codeprint small.
+			for (unsigned int i = 0; i < sizeof(lightPositions) / sizeof(lightPositions[0]); ++i)
+			{
+				glm::vec3 newPos = lightPositions[i] + glm::vec3(sin(glfwGetTime() * 5.0) * 5.0, 0.0, 0.0);
+				newPos = lightPositions[i];
+				pbrShader.SetFloat3(("lightPosition[" + std::to_string(i) + "]").c_str(), newPos);
+				pbrShader.SetFloat3(("lightColors[" + std::to_string(i) + "]").c_str(), lightColors[i]);
+
+				model = glm::mat4(1.0f);
+				model = glm::translate(model, newPos);
+				model = glm::scale(model, glm::vec3(0.5f));
+				pbrShader.SetMat4("model", model);
+				glBindVertexArray(VAOS);
+				//glDrawArrays(GL_TRIANGLES, 0, 36);
+				glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+			}
+
+
+			*/
+
+
+
+			cubemapShader.Use();
+			cubemapShader.SetMat4("view", view);
+			cubemapShader.SetMat4("projection", projection);
+			cubemapShader.SetInt1("environmentMap", 0);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
 			glBindVertexArray(VAO);
 			glDrawArrays(GL_TRIANGLES, 0, 36);
-
-			//glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
+			//std::cout << glGetError() << '\n';
+		
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 		
 			
 			//glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
-			/*
-			cubemapShader.Use();
-			cubemapShader.SetMat4("projection", projection);
-			cubemapShader.SetMat4("view", view);
-			cubemapShader.SetInt1("equirectangularMap", 0.0f);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("albedof"));
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("normalf"));
+			
+		
 
-
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("metallicf"));
-			glActiveTexture(GL_TEXTURE3);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("roughnessf"));
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("aof"));
-			//glBindVertexArray(VAO);
-			glDrawElements(GL_TRIANGLE_STRIP, 100 * 100 * 10, GL_UNSIGNED_INT, 0);
-			*/
+			
 			float inter;
 
 			float intersection_distance; // Output of TestRayOBBIntersection()
@@ -753,9 +746,10 @@ namespace Engine {
 				aabb_min,
 				aabb_max,
 				model,
+				glm::vec3(10.0f, 0.2f, 10.0f),
 				intersection_distance)
 				) {
-				std::cout << "1";
+				//std::cout << "1";
 			}
 
 			glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -764,13 +758,31 @@ namespace Engine {
 			glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
 			// clear all relevant buffers
 			glClearColor(1.0f, 1.f, 1.0f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
-			glClear(GL_COLOR_BUFFER_BIT);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			screenShader.Use();
+			screenShader.SetFloat1("offset", glfwGetTime()*10);
 			glBindVertexArray(quadVAO);
+			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, textureColorbuffer);	// use the color attachment texture as the texture of the quad plane
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
 			
 			ImGui_ImplOpenGL3_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
@@ -804,7 +816,8 @@ namespace Engine {
 			ImGui::SetWindowFontScale(1.0);
 			ImGui::Spacing();
 		
-			ImGui::SliderFloat("Light Rotation ", &rotate1, 0.0f, 360.0f, "%f degrees", 1.0f);
+			ImGui::SliderFloat("Distance", &distance, 3.0f, 10.0f, "%f meters", 1.0f);
+			ImGui::SliderFloat("Camera Rot", &rotate1, 0.0f, 360.0f, "%f degrees", 1.0f);
 		
 
 			ImGui::SliderFloat("Roughness",&roughness , 0.05, 1.0f, "", 0);
@@ -858,9 +871,11 @@ namespace Engine {
 		glm::vec3 aabb_min,          // Minimum X,Y,Z coords of the mesh when not transformed at all.
 		glm::vec3 aabb_max,          // Maximum X,Y,Z coords. Often aabb_min*-1 if your mesh is centered, but it's not always the case.
 		glm::mat4 ModelMatrix,       // Transformation applied to the mesh (which will thus be also applied to its bounding box)
+		glm::vec3 ModelMatrix1,       // Transformation applied to the mesh (which will thus be also applied to its bounding box)
 		float& intersection_distance // Output : distance between ray_origin and the intersection with the OBB
 	) {
 
+		
 		// Intersection method from Real-Time Rendering and Essential Mathematics for Games
 
 		float tMin = 0.0f;
@@ -970,4 +985,265 @@ namespace Engine {
 		return true;
 
 	}
+	void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+	{
+		if (key == GLFW_KEY_P && action == GLFW_PRESS)
+		{
+			if (!input)
+			{
+				glfwSetInputMode(WindowProperties::window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+				firstMouse = true;
+				input = !input;
+			}
+			else
+			{
+
+				glfwSetInputMode(WindowProperties::window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+				input = !input;
+			}
+
+		}
+	}
+	void createSphereVertices(float radius, int sectorCount, int stackCount)
+	{
+		float PI = 3.1415;
+
+
+
+
+		float x, y, z, xy;                              // vertex position
+		float nx, ny, nz, lengthInv = 1.0f / radius;    // vertex normal
+		float s, t;                                     // vertex texCoord
+
+		float sectorStep = 2 * PI / sectorCount;
+		float stackStep = PI / stackCount;
+		float sectorAngle, stackAngle;
+
+		for (int i = 0; i <= stackCount; ++i)
+		{
+			stackAngle = PI / 2 - i * stackStep;        // starting from pi/2 to -pi/2
+			xy = radius * cosf(stackAngle);             // r * cos(u)
+			z = radius * sinf(stackAngle);              // r * sin(u)
+
+			// add (sectorCount+1) vertices per stack
+			// the first and last vertices have same position and normal, but different tex coords
+			for (int j = 0; j <= sectorCount; ++j)
+			{
+				sectorAngle = j * sectorStep;           // starting from 0 to 2pi
+
+				// vertex position (x, y, z)
+				x = xy * cosf(sectorAngle);             // r * cos(u) * cos(v)
+				y = xy * sinf(sectorAngle);             // r * cos(u) * sin(v)
+				vertices.push_back(x);
+				vertices.push_back(y);
+				vertices.push_back(z);
+
+				// normalized vertex normal (nx, ny, nz)
+				nx = x * lengthInv;
+				ny = y * lengthInv;
+				nz = z * lengthInv;
+				vertices.push_back(nx);
+				vertices.push_back(ny);
+				vertices.push_back(nz);
+
+				// vertex tex coord (s, t) range between [0, 1]
+				s = (float)j / sectorCount;
+				t = (float)i / stackCount;
+				vertices.push_back(s);
+				vertices.push_back(t);
+			}
+		}
+		// generate CCW index list of sphere triangles
+		// k1--k1+1
+		// |  / |
+		// | /  |
+		// k2--k2+1
+
+		int k1, k2;
+		for (int i = 0; i < stackCount; ++i)
+		{
+			k1 = i * (sectorCount + 1);     // beginning of current stack
+			k2 = k1 + sectorCount + 1;      // beginning of next stack
+
+			for (int j = 0; j < sectorCount; ++j, ++k1, ++k2)
+			{
+				// 2 triangles per sector excluding first and last stacks
+				// k1 => k2 => k1+1
+				if (i != 0)
+				{
+					indices.push_back(k1);
+					indices.push_back(k2);
+					indices.push_back(k1 + 1);
+				}
+
+				// k1+1 => k2 => k2+1
+				if (i != (stackCount - 1))
+				{
+					indices.push_back(k1 + 1);
+					indices.push_back(k2);
+					indices.push_back(k2 + 1);
+				}
+
+				// store indices for lines
+				// vertical lines for all stacks, k1 => k2
+				lineIndices.push_back(k1);
+				lineIndices.push_back(k2);
+				if (i != 0)  // horizontal lines except 1st stack, k1 => k+1
+				{
+					lineIndices.push_back(k1);
+					lineIndices.push_back(k1 + 1);
+				}
+			}
+		}
+	};
+	void setUpImGui(GLFWwindow* window)
+	{
+		ImGui::CreateContext();
+		//ImGui::SetFl
+		// Setup Platform/Renderer bindings
+		ImGui_ImplGlfw_InitForOpenGL(window, true);
+		ImGui_ImplOpenGL3_Init();
+
+		// Setup Dear ImGui style
+		ImGui::StyleColorsDark();
+		ImGuiStyle* style = &ImGui::GetStyle();
+		ImVec4* colors = style->Colors;
+		//style->WindowRounding = 10;
+		colors[ImGuiCol_Text] = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+		colors[ImGuiCol_TextDisabled] = ImVec4(0.44f, 0.44f, 0.44f, 1.00f);
+		colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
+		colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+		colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.94f);
+		colors[ImGuiCol_Border] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
+		colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+		colors[ImGuiCol_FrameBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+		colors[ImGuiCol_FrameBgHovered] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
+		colors[ImGuiCol_FrameBgActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
+		colors[ImGuiCol_TitleBg] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
+		colors[ImGuiCol_TitleBgActive] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
+		colors[ImGuiCol_MenuBarBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+		colors[ImGuiCol_ScrollbarBg] = ImVec4(0.06f, 0.06f, 0.06f, 0.53f);
+		colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.21f, 0.21f, 0.21f, 1.00f);
+		colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.47f, 0.47f, 0.47f, 1.00f);
+		colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.81f, 0.83f, 0.81f, 1.00f);
+		colors[ImGuiCol_CheckMark] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
+		colors[ImGuiCol_SliderGrab] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_SliderGrabActive] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_Button] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
+		colors[ImGuiCol_ButtonHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_ButtonActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
+		colors[ImGuiCol_Header] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
+		colors[ImGuiCol_HeaderHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_HeaderActive] = ImVec4(0.93f, 0.65f, 0.14f, 1.00f);
+		colors[ImGuiCol_Separator] = ImVec4(0.21f, 0.21f, 0.21f, 1.00f);
+		colors[ImGuiCol_SeparatorHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_SeparatorActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
+		colors[ImGuiCol_ResizeGrip] = ImVec4(0.21f, 0.21f, 0.21f, 1.00f);
+		colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_ResizeGripActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
+		colors[ImGuiCol_Tab] = ImVec4(0.51f, 0.36f, 0.15f, 1.00f);
+		colors[ImGuiCol_TabHovered] = ImVec4(0.91f, 0.64f, 0.13f, 1.00f);
+		colors[ImGuiCol_TabActive] = ImVec4(0.78f, 0.55f, 0.21f, 1.00f);
+		colors[ImGuiCol_TabUnfocused] = ImVec4(0.07f, 0.10f, 0.15f, 0.97f);
+		colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.14f, 0.26f, 0.42f, 1.00f);
+		colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+		colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+		colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+		colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+		colors[ImGuiCol_TextSelectedBg] = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
+		colors[ImGuiCol_DragDropTarget] = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
+		colors[ImGuiCol_NavHighlight] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
+		colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+		colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+		colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
+
+		style->FramePadding = ImVec2(20, 2);
+		style->ItemSpacing = ImVec2(10, 10);
+		style->IndentSpacing = 12;
+		style->ScrollbarSize = 10;
+
+		style->WindowRounding = 15;
+		style->FrameRounding = 4;
+		style->PopupRounding = 4;
+		style->ScrollbarRounding = 6;
+		style->GrabRounding = 4;
+		style->TabRounding = 4;
+
+		style->WindowTitleAlign = ImVec2(1.0f, 0.5f);
+		style->WindowMenuButtonPosition = ImGuiDir_Right;
+
+		style->DisplaySafeAreaPadding = ImVec2(1, 4);
+
+
+	};
+	void cursorPosCallback(GLFWwindow* window, double xpos, double ypos)
+	{
+		if (input) {
+			if (firstMouse)
+			{
+				lastX = xpos;
+				lastY = ypos;
+				firstMouse = false;
+			}
+
+			float xoffset = xpos - lastX;
+			float yoffset = lastY - ypos;
+			lastX = xpos;
+			lastY = ypos;
+
+			float sensitivity = 0.1f;
+			xoffset *= sensitivity;
+			yoffset *= sensitivity;
+
+			YAW += xoffset;
+			PITCH += yoffset;
+
+			if (PITCH > 89.0f)
+				PITCH = 89.0f;
+			if (PITCH < -89.0f)
+				PITCH = -89.0f;
+
+			glm::vec3 direction;
+			direction.x = cos(glm::radians(YAW)) * cos(glm::radians(PITCH));
+			direction.y = sin(glm::radians(PITCH));
+			direction.z = sin(glm::radians(YAW)) * cos(glm::radians(PITCH));
+			cameraFront = glm::normalize(direction);
+		}
+	};
+	void FrameBufferCallback(GLFWwindow* window, int width, int height)
+	{
+		mousePicker.SetDims(width, height);
+		WindowProperties::Height = (float)height;
+		WindowProperties::Width = (float)width;
+		std::cout << WindowProperties::Height << std::endl;
+		std::cout << WindowProperties::Width << std::endl;
+		glViewport(0., 0., width - 250, height);
+
+		glDeleteFramebuffers(1, &framebuffer);
+		glGenFramebuffers(1, &framebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		// create a color attachment texture
+
+		//glGenTextures(1, &textureColorbuffer);
+		glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width - 250, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+		// create a renderbuffer object for depth and stencil attachment (we won't be sampling these)
+
+		//glGenRenderbuffers(1, &rbo);
+		glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width - 250, height); // use a single renderbuffer object for both a depth AND stencil buffer.
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
+		// now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			//	cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << endl;
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+
+	}
+		
 };

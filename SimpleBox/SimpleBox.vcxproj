@@ -187,16 +187,26 @@
     <ClInclude Include="vendor\imgui\imstb_truetype.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="src\Shaders\Brdffs.glsl" />
+    <None Include="src\Shaders\Brdfvs.glsl" />
     <None Include="src\Shaders\Cubemapfs.glsl" />
     <None Include="src\Shaders\Cubemapvs.glsl" />
     <None Include="src\Shaders\Defaultfs.glsl" />
     <None Include="src\Shaders\Defaultvs.glsl" />
+    <None Include="src\Shaders\Eqfs.glsl" />
+    <None Include="src\Shaders\Eqvs.glsl" />
     <None Include="src\Shaders\Framefs.glsl" />
     <None Include="src\Shaders\Framevs.glsl" />
+    <None Include="src\Shaders\Irradiancefs.glsl" />
+    <None Include="src\Shaders\Irradiancevs.glsl" />
     <None Include="src\Shaders\Pbrcubefs.glsl" />
     <None Include="src\Shaders\Pbrcubevs.glsl" />
     <None Include="src\Shaders\Pbrfs.glsl" />
+    <None Include="src\Shaders\Pbrntfs.glsl" />
+    <None Include="src\Shaders\Pbrntvs.glsl" />
     <None Include="src\Shaders\Pbrvs.glsl" />
+    <None Include="src\Shaders\Prefilterfs.glsl" />
+    <None Include="src\Shaders\Prefiltervs.glsl" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="src\OpenGL\font.ttf" />
