@@ -11,7 +11,7 @@ namespace Engine {
 	glm::mat4 view;
 	glm::mat4 projection;
 	
-	bool input = true;
+	bool input = false;
 	bool firstMouse = true;
 	MousePicker mousePicker(projection, view);
 
@@ -130,7 +130,7 @@ namespace Engine {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL); // set depth function to less than AND equal for skybox depth trick.
 
-		glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		//glfwSetInputMode(props.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 		ResourceManager::LoadShader("default",
 			"C:\\Users\\yigit\\source\\repos\\SimpleBox\\SimpleBox\\src\\Shaders\\Defaultvs.glsl",
